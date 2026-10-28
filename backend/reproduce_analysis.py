@@ -49,7 +49,7 @@ def compute_file_hash(filepath: Path) -> str:
 
 
 def get_git_commit() -> str:
-    """Retrieves current git commit hash if available."""
+    """Retrieves current git commit hash if available, with -dirty suffix if working tree is uncommitted."""
     try:
         res = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -58,7 +58,17 @@ def get_git_commit() -> str:
             text=True,
             check=True
         )
-        return res.stdout.strip()
+        commit = res.stdout.strip()
+        status_res = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(backend_dir.parent),
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        if status_res.stdout.strip():
+            return f"{commit}-dirty"
+        return commit
     except Exception:
         return "UNKNOWN_COMMIT"
 
@@ -212,39 +222,13 @@ def run_reproducible_analysis(
         json.dump(dq_data, f, indent=2)
     print(f"Generated Data Quality report: {dq_path.name}")
 
-    # 6. Generate Run Manifest JSON
-    manifest_path = output_dir / "run_manifest.json"
-    cache_files = list(settings.CACHE_DIR.glob("*.json"))
-    manifest_data = {
-        "manifest_version": "1.0",
-        "execution_timestamp_utc": execution_timestamp,
-        "git_commit": get_git_commit(),
-        "command": f"python backend/reproduce_analysis.py --cutoff-hour {cutoff_hour_utc} --cutoff-minute {cutoff_minute_utc} --window {window_type} --resolution {resolution}",
-        "python_version": sys.version,
-        "input_cache_files": [
-            {
-                "file_name": p.name,
-                "size_bytes": p.stat().st_size,
-                "sha256": compute_file_hash(p)
-            }
-            for p in sorted(cache_files)
-        ],
-        "output_artifacts": {
-            "analysis_summary_json": {"file": "analysis_summary.json", "sha256": compute_file_hash(summary_path)},
-            "observations_analysis_csv": {"file": "observations_analysis.csv", "sha256": compute_file_hash(csv_path)},
-            "data_quality_report_json": {"file": "data_quality_report.json", "sha256": compute_file_hash(dq_path)},
-        }
-    }
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(manifest_data, f, indent=2)
-    print(f"Generated Run Manifest: {manifest_path.name}")
-
-    # 7. Generate Validation Log Markdown
+    # 6. Generate Validation Log Markdown
     log_path = output_dir / "validation_log.md"
+    git_rev = get_git_commit()
     with open(log_path, "w", encoding="utf-8") as f:
         f.write(f"# Analysis Validation & Verification Log\n\n")
         f.write(f"- **Executed At**: `{execution_timestamp}`\n")
-        f.write(f"- **Git Commit**: `{manifest_data['git_commit']}`\n")
+        f.write(f"- **Git Revision**: `{git_rev}`\n")
         f.write(f"- **Cutoff**: `{summary_data['effective_cutoff']['rule_string']}` ({summary_data['effective_cutoff']['market_name']})\n")
         f.write(f"- **Resolution**: `{resolution}`\n")
         f.write(f"- **Window Type**: `{window_type}`\n")
@@ -260,6 +244,34 @@ def run_reproducible_analysis(
         for m in val_report["metrics_comparison"]:
             f.write(f"| {m['metric']} | {m['pipeline_val']} | {m['recomputed_val']} | {m['diff']:.4f} | **{m['status']}** |\n")
     print(f"Generated Validation Log: {log_path.name}")
+
+    # 7. Generate Run Manifest JSON (hashes all 4 output artifacts; excludes self to prevent circularity)
+    manifest_path = output_dir / "run_manifest.json"
+    cache_files = list(settings.CACHE_DIR.glob("*.json"))
+    manifest_data = {
+        "manifest_version": "1.0",
+        "execution_timestamp_utc": execution_timestamp,
+        "git_commit": git_rev,
+        "command": f"python backend/reproduce_analysis.py --cutoff-hour {cutoff_hour_utc} --cutoff-minute {cutoff_minute_utc} --window {window_type} --resolution {resolution}",
+        "python_version": sys.version,
+        "input_cache_files": [
+            {
+                "file_name": p.name,
+                "size_bytes": p.stat().st_size,
+                "sha256": compute_file_hash(p)
+            }
+            for p in sorted(cache_files)
+        ],
+        "output_artifacts": {
+            "analysis_summary_json": {"file": "analysis_summary.json", "sha256": compute_file_hash(summary_path)},
+            "observations_analysis_csv": {"file": "observations_analysis.csv", "sha256": compute_file_hash(csv_path)},
+            "data_quality_report_json": {"file": "data_quality_report.json", "sha256": compute_file_hash(dq_path)},
+            "validation_log_md": {"file": "validation_log.md", "sha256": compute_file_hash(log_path)}
+        }
+    }
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest_data, f, indent=2)
+    print(f"Generated Run Manifest: {manifest_path.name}")
 
     return {
         "status": summary_data["validation_status"],

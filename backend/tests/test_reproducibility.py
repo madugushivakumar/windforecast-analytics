@@ -186,3 +186,30 @@ def test_partial_hour_actual_aggregation():
     assert row["actual_hh0_mw"] == 1000.0
     assert row["actual_hh1_mw"] == 2000.0
     assert row["signed_error_mw"] == 0.0  # 1500 - 1500
+
+
+def test_partial_hour_missing_half_hour_is_incomplete():
+    """Verify that if one half-hour actual is missing, the hour is flagged as MISSING_ACTUAL."""
+    matcher = Matcher()
+    t1 = pd.Timestamp("2026-01-01T00:00:00Z")
+    df_f = pd.DataFrame([
+        {
+            "startTime": t1,
+            "forecast_mw": 1500.0,
+            "decision_date": "2025-12-31",
+            "decision_cutoff": pd.Timestamp("2025-12-31T11:00:00Z"),
+            "selected_publish_time": pd.Timestamp("2025-12-31T10:00:00Z"),
+            "lead_time_hours": 14.0
+        }
+    ])
+    # Only period 1 exists, period 2 (:30) is missing
+    df_a = pd.DataFrame([
+        {"startTime": pd.Timestamp("2026-01-01T00:00:00Z"), "actual_mw": 1000.0, "settlementDate": "2026-01-01", "settlementPeriod": 1},
+    ])
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+    assert len(df_matched) == 1
+    row = df_matched.iloc[0]
+    assert row["status"] == "MISSING_ACTUAL"
+    assert pd.isna(row["actual_mw"])
+    assert counts["matched_periods"] == 0
+    assert counts["missing_actual"] == 1

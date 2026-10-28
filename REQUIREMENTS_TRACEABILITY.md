@@ -26,7 +26,7 @@ This document maps every requirement from the Master Project Build Prompt to its
 | **REQ-20** | Page C: Accuracy Analysis & Error Distribution | `frontend/src/pages/AccuracyPage.tsx` | Vitest & Component review | **VERIFIED** |
 | **REQ-21** | Page D: Data Explorer with sorting, filtering, and real CSV Export | `frontend/src/pages/DataExplorerPage.tsx` | API test & Component review | **VERIFIED** |
 | **REQ-22** | Centralized API client and environment configuration | `frontend/src/services/api.ts` | Vitest & Component review | **VERIFIED** |
-| **REQ-23** | Automated backend unit & integration tests | `backend/tests/` | Pytest runner (31 passed, 1 skipped) | **VERIFIED** |
+| **REQ-23** | Automated backend unit & integration tests | `backend/tests/` | Pytest runner (44 passed, 1 skipped) | **VERIFIED** |
 | **REQ-24** | Automated frontend component tests | `frontend/src/tests/` | Vitest runner (5 passed) | **VERIFIED** |
 | **REQ-25** | Dockerfile for backend & multi-stage Dockerfile for frontend | `backend/Dockerfile`, `frontend/Dockerfile` | Docker syntax & multi-stage config | **VERIFIED** |
 | **REQ-26** | Docker Compose orchestration | `docker-compose.yml` | Compose configuration | **VERIFIED** |

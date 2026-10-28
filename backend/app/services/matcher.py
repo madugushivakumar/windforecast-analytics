@@ -61,13 +61,20 @@ class Matcher:
                 
                 period_str = f"P{min(s_periods)}-P{max(s_periods)}" if s_periods else None
                 s_date = s_dates[0] if s_dates else None
-                mean_mw = float(sum(gens) / len(gens)) if gens else 0.0
+                
+                # Hourly power is only valid if both half-hourly intervals exist
+                if len(gens) == 2:
+                    mean_mw = float((gens[0] + gens[1]) / 2.0)
+                    actual_mw_val = round(mean_mw, 2)
+                else:
+                    # Partial or incomplete hour: do not silently average or complete
+                    actual_mw_val = None
                 
                 agg_rows.append({
                     "startTime": hour_dt,
                     "settlementDate": s_date,
                     "settlementPeriod": period_str,
-                    "actual_mw": round(mean_mw, 2),
+                    "actual_mw": actual_mw_val,
                     "actual_hh0_mw": gens[0] if len(gens) > 0 else None,
                     "actual_hh1_mw": gens[1] if len(gens) > 1 else None,
                     "hh_count": len(gens)

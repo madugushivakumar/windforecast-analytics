@@ -1,6 +1,6 @@
 # WindForecast Analytics: UK National Wind Generation Day-Ahead Forecast Accuracy (January 2026)
 
-[![Backend Tests](https://img.shields.io/badge/Pytest-43%20passed-success)](./backend/tests)
+[![Backend Tests](https://img.shields.io/badge/Pytest-44%20passed-success)](./backend/tests)
 [![Frontend Tests](https://img.shields.io/badge/Vitest-5%20passed-success)](./frontend/src/tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Verified-blue)](./frontend)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](./backend)
@@ -337,7 +337,7 @@ docker compose up --build
 ```bash
 python -m pytest backend/tests -v
 ```
-*Expected: 43 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
+*Expected: 44 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
 
 ### Run Reproducible Analysis & Audit Verification Pipeline
 ```bash
@@ -386,5 +386,26 @@ In accordance with assignment requirements:
 ## 18. Known Limitations & Future Improvements
 
 1. **Forecast Horizon Resolution**: Elexon `WINDFOR` national forecasts for January 2026 are published at hourly resolution, while `FUELHH` actuals are recorded at 30-minute settlement period frequency. The platform matches all 744 hourly periods strictly without fabricating unobserved half-hours. Future enhancements could implement configurable half-hour spline interpolation if requested by commercial desks.
-2. **Additional Market Cutoffs**: The default cutoff is 11:00 UTC D-1 (EPEX SPOT Day-Ahead Auction). Users can toggle alternative cutoffs (12:00 UTC, 09:00 UTC, or custom lead times). Future versions could support Intraday 1-hour gate closure rolling horizons.
+2. **Additional Market Cutoffs**: The default cutoff is 11:00 UTC on Day D-1 (configured as an operational utility procurement assumption, with full minute-level support for official exchange deadlines like 09:20 UTC for EPEX SPOT GB or 09:50 UTC for Nord Pool GB). Users can toggle alternative cutoffs via `--cutoff-hour` and `--cutoff-minute`.
 3. **Regional Disaggregation**: Current analysis evaluates national transmission-level wind generation. Integration of embedded wind generation (PV & distributed wind) would provide further insights into localized grid congestion.
+
+---
+
+## 19. Submission Readiness Status Summary
+
+> **Overall Submission Readiness Status**: **BLOCKED**  
+> Technical verification, test suites, and analysis reproducibility are 100% verified (`PASS`). Overall submission readiness remains strictly **BLOCKED** until external user deliverables (public repository, deployed application, demo video, and Microsoft Form submission) are completed.
+
+| Area / Deliverable | Status | Verification Status & Operational Notes |
+|---|---|---|
+| **Core application** | `PASS` | All functional, data-cleaning, cutoff, and metric requirements verified on real Elexon January 2026 data. |
+| **Automated tests** | `PASS` | Pytest: 44 passed, 1 skipped, 0 failed. Vitest: 5 passed, 0 failed. TypeScript typecheck and Vite build clean. |
+| **Analysis reproducibility** | `PASS` | Deterministic pipeline (`reproduce_analysis.py`) generates 5 audited artifacts in `artifacts/january_2026/` with 0 lookahead bias. |
+| **Docker configuration** | `PASS` | `docker compose config` validates with exit code 0 and zero warnings. |
+| **Docker image build** | `BLOCKED` | Docker Desktop background service is stopped on the Windows host. |
+| **Docker runtime & health** | `BLOCKED` | Blocked on Docker daemon availability. Service requires Administrator elevation or interactive GUI launch. |
+| **Public Git repository** | `BLOCKED` | Clean Git commit on `master` branch (`63706e9`), awaiting user's remote repository configuration. |
+| **Public deployment** | `BLOCKED` | Vercel and Heroku/Render configurations prepared; awaiting user deployment credentials. |
+| **Demo video** | `BLOCKED` | Timed script complete in `docs/VIDEO_SCRIPT.md`; awaiting user screen/voice recording. |
+| **Final external submission** | `BLOCKED` | Microsoft Form at `https://forms.cloud.microsoft/r/FTX6K2bbnU` requires public repo URL and demo video link. |
+

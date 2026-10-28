@@ -41,9 +41,9 @@ This guide details how to deploy the WindForecast Analytics platform to producti
    heroku config:set DEFAULT_CUTOFF_HOUR_UTC=11
    heroku config:set ENABLE_CACHE=true
    ```
-5. **Deploy Code**:
+5. **Deploy Code** (from current `master` branch):
    ```bash
-   git subtree push --prefix backend heroku main
+   git subtree push --prefix backend heroku master:main
    ```
 6. **Verify Health Endpoint**:
    ```bash

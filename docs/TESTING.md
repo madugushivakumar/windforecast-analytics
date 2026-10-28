@@ -23,11 +23,11 @@ python -m pytest backend/tests -v
 ```
 
 **Results**:
-- **Total Test Cases**: 44 (43 deterministic + 1 opt-in live test)
-- **Passed**: 43 (100% of deterministic suite)
+- **Total Test Cases**: 45 (44 deterministic + 1 opt-in live test)
+- **Passed**: 44 (100% of deterministic suite)
 - **Skipped**: 1 (Live Elexon API integration test, activated via `$env:RUN_LIVE_TESTS="1"`)
 - **Failed**: 0
-- **Duration**: ~4.2 seconds
+- **Duration**: ~4.5 seconds
 
 | Test File | Test Name | Target Behavior | Result |
 |---|---|---|---|
@@ -67,6 +67,7 @@ python -m pytest backend/tests -v
 | `test_reproducibility.py` | `test_api_metrics_match_saved_artifacts` | Asserts `/api/accuracy` and `/api/overview` exactly match saved summary | **PASSED** |
 | `test_reproducibility.py` | `test_hand_calculated_metric_fixtures` | Hand-calculated fixture validation for MAE, RMSE, Bias, WAPE, MAPE | **PASSED** |
 | `test_reproducibility.py` | `test_partial_hour_actual_aggregation` | Verifies hourly actual aggregation preserves both half-hour readings | **PASSED** |
+| `test_reproducibility.py` | `test_partial_hour_missing_half_hour_is_incomplete` | Flags hour as MISSING_ACTUAL if one half-hour reading is missing | **PASSED** |
 | `test_api.py` | `test_root_endpoint` | Verifies root service metadata | **PASSED** |
 | `test_api.py` | `test_health_endpoint` | Distinguishes app health from upstream Elexon API | **PASSED** |
 | `test_api.py` | `test_overview_endpoint` | Verifies overview KPIs, sample size, and MAE | **PASSED** |
