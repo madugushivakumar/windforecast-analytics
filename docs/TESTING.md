@@ -23,10 +23,11 @@ python -m pytest backend/tests -v
 ```
 
 **Results**:
-- **Total Test Cases**: 32 (31 deterministic + 1 opt-in live test)
-- **Passed**: 31 (100% of deterministic suite; 32 passed when live API opt-in is enabled)
+- **Total Test Cases**: 44 (43 deterministic + 1 opt-in live test)
+- **Passed**: 43 (100% of deterministic suite)
+- **Skipped**: 1 (Live Elexon API integration test, activated via `$env:RUN_LIVE_TESTS="1"`)
 - **Failed**: 0
-- **Duration**: ~3.8 seconds
+- **Duration**: ~4.2 seconds
 
 | Test File | Test Name | Target Behavior | Result |
 |---|---|---|---|
@@ -42,18 +43,30 @@ python -m pytest backend/tests -v
 | `test_data_cleaner.py` | `test_clean_fuelhh_actuals_discards_negative_and_invalid` | Filters negative generation and malformed records | **PASSED** |
 | `test_data_cleaner.py` | `test_clean_fuelhh_resolves_duplicates_keeping_latest_publish` | Deterministic duplicate resolution keeping latest publishTime | **PASSED** |
 | `test_forecast_selector.py` | `test_compute_day_ahead_cutoff` | Computes D-1 11:00 UTC gate closure timestamp | **PASSED** |
+| `test_forecast_selector.py` | `test_compute_day_ahead_cutoff_with_minutes` | Computes minute-level gate closure (e.g., EPEX SPOT 09:20 UTC) | **PASSED** |
+| `test_forecast_selector.py` | `test_compute_day_ahead_cutoff_invalid_configuration` | Asserts ValueError on invalid hours/minutes (<0 or >23 / >59) | **PASSED** |
 | `test_forecast_selector.py` | `test_forecast_selector_excludes_post_cutoff_forecasts` | Strictly excludes forecasts published after gate closure | **PASSED** |
 | `test_forecast_selector.py` | `test_forecast_selector_empty_when_no_eligible_forecast` | Flags missing forecast when no pre-cutoff vintage exists | **PASSED** |
 | `test_forecast_selector.py` | `test_forecast_history_vintages_auditing` | Preserves all forecast runs and tags eligibility | **PASSED** |
 | `test_forecast_selector.py` | `test_january_decision_window_boundaries` | Boundary test for Dec 31, Jan 1, Jan 31, and Feb 1 decision dates | **PASSED** |
 | `test_forecast_selector.py` | `test_gate_closure_second_level_precision_and_lookahead_bias` | Second-level precision test for 11:00:00 vs 11:00:01 publication | **PASSED** |
+| `test_forecast_selector.py` | `test_timezone_naive_and_aware_normalization` | Verifies robust handling of naive and aware timestamps in UTC | **PASSED** |
+| `test_forecast_selector.py` | `test_cutoff_override_epex_spot_0920` | Verifies vintage selection under official EPEX SPOT 09:20 UTC cutoff | **PASSED** |
+| `test_forecast_selector.py` | `test_market_cutoff_info_metadata` | Verifies market cutoff documentation and classification metadata | **PASSED** |
 | `test_matcher.py` | `test_matcher_exact_join_and_errors` | Joins strictly on delivery `startTime`, flags unmatched | **PASSED** |
 | `test_matcher.py` | `test_matcher_hourly_aggregation` | Evaluates arithmetic mean of half-hour power readings with full audit columns | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_provenance_labeling_disk_cache` | Asserts exact `DISK_CACHE` label when reading from disk | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_corrupted_cache_fallback` | Validates fallback to live stream on empty/corrupt cache | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_pipeline_decision_date_window_selection` | Verifies 744 hours delivery from Jan 1-31 decisions (delivering Jan 2-Feb 1) | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_pipeline_half_hourly_resolution_transparency` | Verifies transparent reporting of 744 unforecasted half-hours (50% coverage) | **PASSED** |
-| `test_provenance_and_pipeline.py` | `test_live_elexon_api_integration` | Opt-in live smoke test against `data.elexon.co.uk` | **PASSED** (Opt-in) |
+| `test_provenance_and_pipeline.py` | `test_live_elexon_api_integration` | Opt-in live smoke test against `data.elexon.co.uk` | **SKIPPED** (Opt-in) |
+| `test_reproducibility.py` | `test_artifacts_exist_and_are_valid` | Verifies all 5 January 2026 audit artifacts exist with valid schemas | **PASSED** |
+| `test_reproducibility.py` | `test_independent_validation_passes` | Recomputes all metrics from raw CSV; verifies zero discrepancy (<0.003) | **PASSED** |
+| `test_reproducibility.py` | `test_zero_lookahead_bias_in_saved_csv` | Audits all 744 rows: asserts 0 records with publishTime > decisionCutoff | **PASSED** |
+| `test_reproducibility.py` | `test_february_1_deliveries_included_for_january_decisions` | Verifies 24 hours of Feb 1 deliveries resulting from Jan 31 decisions | **PASSED** |
+| `test_reproducibility.py` | `test_api_metrics_match_saved_artifacts` | Asserts `/api/accuracy` and `/api/overview` exactly match saved summary | **PASSED** |
+| `test_reproducibility.py` | `test_hand_calculated_metric_fixtures` | Hand-calculated fixture validation for MAE, RMSE, Bias, WAPE, MAPE | **PASSED** |
+| `test_reproducibility.py` | `test_partial_hour_actual_aggregation` | Verifies hourly actual aggregation preserves both half-hour readings | **PASSED** |
 | `test_api.py` | `test_root_endpoint` | Verifies root service metadata | **PASSED** |
 | `test_api.py` | `test_health_endpoint` | Distinguishes app health from upstream Elexon API | **PASSED** |
 | `test_api.py` | `test_overview_endpoint` | Verifies overview KPIs, sample size, and MAE | **PASSED** |

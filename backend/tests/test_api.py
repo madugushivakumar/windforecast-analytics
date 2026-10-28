@@ -59,6 +59,9 @@ def mock_pipeline_data():
     ])
     pipeline_service.data_source = "MOCK_TEST_FIXTURE"
     yield
+    pipeline_service.df_matched = pd.DataFrame()
+    pipeline_service.df_clean_forecasts = pd.DataFrame()
+    pipeline_service.data_source = "UNINITIALIZED"
 
 
 def test_root_endpoint():

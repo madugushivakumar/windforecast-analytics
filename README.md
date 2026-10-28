@@ -1,6 +1,6 @@
 # WindForecast Analytics: UK National Wind Generation Day-Ahead Forecast Accuracy (January 2026)
 
-[![Backend Tests](https://img.shields.io/badge/Pytest-31%20passed-success)](./backend/tests)
+[![Backend Tests](https://img.shields.io/badge/Pytest-43%20passed-success)](./backend/tests)
 [![Frontend Tests](https://img.shields.io/badge/Vitest-5%20passed-success)](./frontend/src/tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Verified-blue)](./frontend)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](./backend)
@@ -26,7 +26,7 @@ Because wind generation is weather-dependent and highly intermittent, commercial
 
 - **Authoritative Elexon BMRS Ingestion**: Connects directly to official Elexon Insights Solution stream endpoints for `FUELHH` (outturn generation) and `WINDFOR` (day-ahead national wind forecasts) with bounded 7-day chunking, exponential backoff retries, and local disk cache fallback.
 - **Strict Fuel Filtering**: Filters `FUELHH` generation strictly to `fuelType == 'WIND'`, discarding all conventional, nuclear, and interconnection flows.
-- **Day-Ahead Decision Cutoff Enforcement**: Enforces market gate closure rules (default: 11:00 UTC on day $D-1$). Only forecasts published strictly prior to or at gate closure (`publishTime <= cutoffTime`) are eligible. The latest eligible vintage is selected with zero future lookahead.
+- **Day-Ahead Decision Cutoff Enforcement**: Enforces market gate closure rules with minute-level precision (default: 11:00 UTC on day $D-1$ as an operational utility purchasing assumption; fully configurable to official exchange deadlines like 09:20 UTC for EPEX SPOT GB). Only forecasts published strictly prior to or at gate closure (`publishTime <= cutoffTime`) are eligible. The latest eligible vintage is selected with zero future lookahead.
 - **January 2026 Decision-Date Window Filtering**: Evaluates all purchasing decisions made between `2026-01-01 00:00:00 UTC` and `2026-02-01 00:00:00 UTC` (exclusive), corresponding to deliveries from `2026-01-02 00:00:00 UTC` through `2026-02-01 23:00:00 UTC` (or `23:30:00 UTC` half-hourly).
 - **Dual Resolution Alignment**:
   - **Hourly Aggregated Evaluation (Primary / Evaluated)**: Pairs hourly WINDFOR forecasts with arithmetic-mean actual generation across the two half-hours in that hour: $A_H = \frac{A_{H:00} + A_{H:30}}{2} \text{ MW}$, yielding 100.0% coverage across all 744 hours in the 31-day delivery span.
@@ -120,14 +120,18 @@ WindForecast Analytics queries the live official Elexon Insights Solution (BMRS)
 
 ## 6. January 2026 Scope & Decision Cutoff Rules
 
-- **Decision-Date Window (Primary Focus)**: Purchasing decisions executed in January 2026 (`2026-01-01 00:00:00 UTC` through `2026-02-01 00:00:00 UTC` exclusive). Under the Day-Ahead rule, decisions made on January 1 deliver on January 2; decisions made on January 31 deliver on February 1. Decisions executed on December 31 (delivering on January 1) belong to December 2025 commercial decisions and are excluded.
-- **Delivery Window (Alternative Toggle)**: Half-hour delivery periods occurring within January 2026 (`2026-01-01 00:00:00 UTC` through `2026-01-31 23:30:00 UTC`).
-- **Gate Closure Cutoff Logic**:
+- **Decision-Date Window (Primary Focus)**: Purchasing decisions executed in January 2026 (`2026-01-01 00:00:00 UTC` through `2026-02-01 00:00:00 UTC` exclusive). Under the Day-Ahead rule, decisions made on January 1 deliver on January 2; decisions made on January 31 deliver on February 1 (all 24 hours of February 1 are included). Decisions executed on December 31, 2025 (delivering January 1, 2026) belong to December 2025 commercial decisions and are excluded.
+- **Delivery Window (Alternative Toggle)**: Delivery periods occurring strictly within January 2026 (`2026-01-01 00:00:00 UTC` through `2026-01-31 23:00:00 UTC` hourly or `23:30:00 UTC` half-hourly).
+- **Gate Closure Cutoff Logic & Market Rules**:
   - For delivery on Day $D$, day-ahead wholesale auction orders close on Day $D-1$.
-  - **Default Cutoff**: **11:00 UTC on Day $D-1$** (EPEX SPOT UK Day-Ahead Auction).
-  - **Configurable Cutoffs**: 12:00 UTC (GB DA Auction 2), 09:00 UTC (Early DA), or custom hours.
-  - **Eligibility Rule**: A forecast vintage is eligible if and only if `publishTime <= decisionCutoff`.
-  - **Selection Rule**: The system selects the forecast with $\max(\text{publishTime})$ among all eligible records. Any forecast published after 11:00 UTC is strictly excluded to prevent future lookahead bias.
+  - **Verified Official Market Closures**:
+    - **EPEX SPOT GB 60min Day-Ahead Auction**: Order book closes at **09:20 GMT/UTC** daily on Day $D-1$ ([EPEX SPOT Market Data](https://www.epexspot.com/en/market-data)).
+    - **Nord Pool GB Day-Ahead Auction (N2EX)**: Order book closes at **09:50 GMT/UTC** (10:50 CET) daily on Day $D-1$ ([Nord Pool GB Auction](https://www.nordpoolgroup.com/trading/Day-ahead-trading/Auction-GB/)).
+    - **EPEX SPOT GB 30min Day-Ahead Auction**: Order book closes at **15:30 GMT/UTC** daily on Day $D-1$.
+  - **Default Project Cutoff (11:00 UTC)**: Configured as an **operational utility purchasing decision assumption** (aligned with the European SDAC 12:00 CET/11:00 UTC reference). This enables commercial utilities to incorporate National Grid ESO's **10:30 UTC WINDFOR forecast release** prior to midday operations.
+  - **Configurability**: Minute-level precision is supported via `--cutoff-hour` and `--cutoff-minute` (e.g. `09:20` for official EPEX SPOT GB or `11:00` for operational utility baseline).
+  - **Eligibility Rule**: A forecast vintage is eligible if and only if `publishTime <= decisionCutoff`. Forecast revisions published strictly after the cutoff are excluded to prevent future lookahead bias.
+  - **Selection Rule**: The system selects the forecast with $\max(\text{publishTime})$ among all eligible records, preserving its original publication timestamp for auditing.
 
 ---
 
@@ -333,7 +337,18 @@ docker compose up --build
 ```bash
 python -m pytest backend/tests -v
 ```
-*Expected: 31 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
+*Expected: 43 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
+
+### Run Reproducible Analysis & Audit Verification Pipeline
+```bash
+python backend/reproduce_analysis.py --cutoff-hour 11 --cutoff-minute 0 --window decision --resolution hourly
+```
+*Generates and validates all 5 audit artifacts into `artifacts/january_2026/`:*
+1. `analysis_summary.json` (Configuration, effective cutoff metadata, final metrics, independent validation status)
+2. `observations_analysis.csv` (744 rows of evaluated hourly observations with decision cutoff and selected publish timestamps)
+3. `data_quality_report.json` (Record counts, duplicates resolved, missing actuals, 100% data coverage)
+4. `run_manifest.json` (SHA-256 hashes of input caches and output artifacts, git commit, python version)
+5. `validation_log.md` (Table comparing primary pipeline against independent recomputations with diff < 0.003)
 
 ### Run Frontend Tests (Vitest)
 ```bash

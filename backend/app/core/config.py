@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     # Default Analysis Parameters
     TARGET_YEAR: int = 2026
     TARGET_MONTH: int = 1
-    DEFAULT_CUTOFF_HOUR_UTC: int = 11  # 11:00 UTC day-ahead gate closure
+    DEFAULT_CUTOFF_HOUR_UTC: int = 11  # Default operational decision cutoff hour
+    DEFAULT_CUTOFF_MINUTE_UTC: int = 0  # Default operational decision cutoff minute
+    DEFAULT_CUTOFF_TYPE: str = "operational_modelling_assumption"
+    DEFAULT_CUTOFF_DESCRIPTION: str = "Utility operational decision cutoff (11:00 UTC D-1; configurable modelling assumption)"
     
     # Data & Cache Directories
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent

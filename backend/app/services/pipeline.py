@@ -7,7 +7,7 @@ import pandas as pd
 from app.core.config import settings
 from app.services.elexon_client import ElexonApiClient
 from app.services.data_cleaner import DataCleaner
-from app.services.forecast_selector import ForecastSelector
+from app.services.forecast_selector import ForecastSelector, get_market_cutoff_info
 from app.services.matcher import Matcher
 from app.analytics.metrics import (
     calculate_mae,
@@ -35,7 +35,10 @@ class AnalyticsPipeline:
     def __init__(self, elexon_client: Optional[ElexonApiClient] = None):
         self.client = elexon_client or ElexonApiClient()
         self.cleaner = DataCleaner()
-        self.selector = ForecastSelector(cutoff_hour_utc=settings.DEFAULT_CUTOFF_HOUR_UTC)
+        self.selector = ForecastSelector(
+            cutoff_hour_utc=settings.DEFAULT_CUTOFF_HOUR_UTC,
+            cutoff_minute_utc=settings.DEFAULT_CUTOFF_MINUTE_UTC
+        )
         self.matcher = Matcher()
         
         # In-memory cached artifacts and state
@@ -57,6 +60,7 @@ class AnalyticsPipeline:
         target_year: int = 2026,
         target_month: int = 1,
         cutoff_hour_utc: int = 11,
+        cutoff_minute_utc: int = 0,
         window_type: str = "decision",
         resolution: str = "hourly",
         force_refresh: bool = False
@@ -73,6 +77,7 @@ class AnalyticsPipeline:
             not force_refresh
             and not self.df_matched.empty
             and self.selector.cutoff_hour_utc == cutoff_hour_utc
+            and self.selector.cutoff_minute_utc == cutoff_minute_utc
             and self.current_window_type == window_type
             and self.current_resolution == resolution
             and self.target_year == target_year
@@ -82,6 +87,7 @@ class AnalyticsPipeline:
             return self.df_matched
 
         self.selector.cutoff_hour_utc = cutoff_hour_utc
+        self.selector.cutoff_minute_utc = cutoff_minute_utc
         self.current_window_type = window_type
         self.current_resolution = resolution
         self.target_year = target_year
@@ -114,7 +120,11 @@ class AnalyticsPipeline:
         self.df_clean_forecasts = df_for
 
         # Step 3: Select Day-Ahead forecasts published <= cutoff
-        df_selected_forecasts = self.selector.select_day_ahead_forecasts(df_for, cutoff_hour_utc=cutoff_hour_utc)
+        df_selected_forecasts = self.selector.select_day_ahead_forecasts(
+            df_for,
+            cutoff_hour_utc=cutoff_hour_utc,
+            cutoff_minute_utc=cutoff_minute_utc
+        )
 
         # Step 4: Match on startTime with specified resolution
         df_matched, match_counts = self.matcher.match(df_selected_forecasts, df_act, resolution=resolution)
@@ -162,11 +172,12 @@ class AnalyticsPipeline:
         else:
             self.data_source = f"{fuel_prov}/{wind_prov}"
 
+        cutoff_meta = get_market_cutoff_info(cutoff_hour_utc, cutoff_minute_utc)
         notes = [
             f"Analysis Window: {window_type.capitalize()} Window ({'Decisions Jan 1-31 delivering Jan 2-Feb 1' if window_type == 'decision' else 'Delivery Jan 1-31'}).",
             f"Resolution: {resolution.capitalize()} ({'Mean actual MW of two half-hours vs 1-hour forecast' if resolution == 'hourly' else 'Exact half-hourly join'}).",
-            f"Evaluated Day-Ahead gate closure cutoff at {cutoff_hour_utc}:00 UTC (D-1).",
-            f"Selected latest eligible WINDFOR vintage where publishTime <= cutoff.",
+            f"Decision Cutoff: {cutoff_meta['rule_description']} [Type: {cutoff_meta['type']}, Official Exchange Closure: {cutoff_meta['is_official_exchange_closure']}].",
+            f"Selected latest eligible WINDFOR vintage where publishTime <= cutoff timestamp.",
             f"Data Source Provenance: FUELHH={fuel_prov}, WINDFOR={wind_prov}."
         ]
 
@@ -278,10 +289,13 @@ class AnalyticsPipeline:
 
         window_desc = "January 2026 Day-Ahead Market (Decision Window: Jan 1 - Jan 31)" if self.current_window_type == "decision" else "January 2026 Delivery Window (Jan 1 - Jan 31)"
 
+        cutoff_meta = get_market_cutoff_info(self.selector.cutoff_hour_utc, self.selector.cutoff_minute_utc)
+        cutoff_rule_str = f"Day D-1 at {self.selector.cutoff_hour_utc:02d}:{self.selector.cutoff_minute_utc:02d} UTC ({cutoff_meta['market_name']})"
+
         return OverviewResponse(
             title="WindForecast Analytics",
             analysis_window=window_desc,
-            decision_cutoff_rule=f"Day D-1 at {self.selector.cutoff_hour_utc}:00 UTC",
+            decision_cutoff_rule=cutoff_rule_str,
             metrics=metrics,
             coverage_percentage=dq.data_coverage_percentage,
             total_delivery_periods=dq.total_expected_periods,

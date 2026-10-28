@@ -1,0 +1,150 @@
+{
+  "project": "WindForecast Analytics",
+  "run_timestamp_utc": "2026-10-28T07:09:54.798844+00:00",
+  "target_period": "January 2026",
+  "window_type": "decision",
+  "window_description": "Decisions Jan 1 to Jan 31 delivering Jan 2 to Feb 1",
+  "decision_window_utc": {
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-02-01T00:00:00Z",
+    "convention": "inclusive start, exclusive end"
+  },
+  "delivery_window_utc": {
+    "start": "2026-01-02T00:00:00Z",
+    "end": "2026-02-01T23:00:00Z"
+  },
+  "evaluation_resolution": "hourly",
+  "resolution_description": "Hourly arithmetic mean power ((A00 + A30)/2 MW) vs 1-hour forecast",
+  "effective_cutoff": {
+    "hour_utc": 11,
+    "minute_utc": 0,
+    "rule_string": "11:00 UTC on Day D-1",
+    "market_name": "Utility Operational Day-Ahead Decision Window",
+    "type": "operational_modelling_assumption",
+    "is_official_exchange_closure": false,
+    "description": "Configurable operational modelling assumption (11:00 UTC on Day D-1) representing a utility's late-morning procurement decision window (aligned with European SDAC reference; enables evaluating latest 10:30 UTC NESO forecast update). Note: Not an official GB exchange order book closure.",
+    "source_url": "Configurable internal trading model"
+  },
+  "data_provenance": {
+    "overall": "DISK_CACHE",
+    "fuelhh_actuals": "DISK_CACHE",
+    "windfor_forecasts": "DISK_CACHE"
+  },
+  "coverage": {
+    "expected_periods": 744,
+    "matched_periods": 744,
+    "missing_forecasts": 0,
+    "missing_actuals": 0,
+    "coverage_percentage": 100.0,
+    "coverage_denominator": "744 delivery hours (31 days * 24 hours)"
+  },
+  "metrics": {
+    "sample_size": 744,
+    "mae_mw": 2013.01,
+    "rmse_mw": 2505.94,
+    "mean_signed_error_bias_mw": 1729.93,
+    "max_abs_error_mw": 6833.0,
+    "min_signed_error_mw": -4128.0,
+    "max_signed_error_mw": 6833.0,
+    "error_std_mw": 1814.25,
+    "wape_percentage": 17.84,
+    "conditional_mape_percentage": 21.61,
+    "conditional_mape_threshold_mw": 100.0,
+    "unit": "MW"
+  },
+  "validation_status": "PASSED",
+  "independent_validation": {
+    "all_checks_passed": true,
+    "checks": [
+      {
+        "description": "Total Rows Equal Expected Comparison Periods",
+        "expected": 744,
+        "computed": 744,
+        "status": "PASS"
+      },
+      {
+        "description": "Matched Observations Count",
+        "expected": 744,
+        "computed": 744,
+        "status": "PASS"
+      },
+      {
+        "description": "Zero Lookahead Bias (publishTime <= decisionCutoff for all records)",
+        "expected": 0,
+        "computed": 0,
+        "status": "PASS"
+      },
+      {
+        "description": "Decision Dates Strictly in January 2026 (2026-01-01 to 2026-01-31)",
+        "expected": 0,
+        "computed": 0,
+        "status": "PASS"
+      }
+    ],
+    "metrics_comparison": [
+      {
+        "metric": "MAE (MW)",
+        "pipeline_val": 2013.01,
+        "recomputed_val": 2013.01,
+        "diff": 0.0019354838709659816,
+        "status": "PASS"
+      },
+      {
+        "metric": "RMSE (MW)",
+        "pipeline_val": 2505.94,
+        "recomputed_val": 2505.94,
+        "diff": 0.0031493703809246654,
+        "status": "PASS"
+      },
+      {
+        "metric": "Mean Signed Error / Bias (MW)",
+        "pipeline_val": 1729.93,
+        "recomputed_val": 1729.93,
+        "diff": 0.0014516129031107994,
+        "status": "PASS"
+      },
+      {
+        "metric": "Max Absolute Error (MW)",
+        "pipeline_val": 6833.0,
+        "recomputed_val": 6833.0,
+        "diff": 0.0,
+        "status": "PASS"
+      },
+      {
+        "metric": "Min Signed Error (MW)",
+        "pipeline_val": -4128.0,
+        "recomputed_val": -4128.0,
+        "diff": 0.0,
+        "status": "PASS"
+      },
+      {
+        "metric": "Max Signed Error (MW)",
+        "pipeline_val": 6833.0,
+        "recomputed_val": 6833.0,
+        "diff": 0.0,
+        "status": "PASS"
+      },
+      {
+        "metric": "Error Std Dev (MW)",
+        "pipeline_val": 1814.25,
+        "recomputed_val": 1814.25,
+        "diff": 0.0025503057056539546,
+        "status": "PASS"
+      },
+      {
+        "metric": "WAPE (%)",
+        "pipeline_val": 17.84,
+        "recomputed_val": 17.84,
+        "diff": 0.00018924672366082973,
+        "status": "PASS"
+      },
+      {
+        "metric": "Conditional MAPE (%)",
+        "pipeline_val": 21.61,
+        "recomputed_val": 21.61,
+        "diff": 0.00015681846637960462,
+        "status": "PASS"
+      }
+    ]
+  }
+}

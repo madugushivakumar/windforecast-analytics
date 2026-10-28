@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import Response
 
 from app.services.pipeline import pipeline_service
+from app.services.forecast_selector import get_market_cutoff_info
 from app.analytics.metrics import compute_error_distribution
 from app.schemas.metrics import OverviewResponse, AccuracyMetrics
 from app.schemas.data_quality import DataQualitySummary
@@ -17,6 +18,7 @@ router = APIRouter(prefix="/api", tags=["Analytics"])
 @router.get("/overview", response_model=OverviewResponse)
 def get_overview(
     cutoff_hour: int = Query(11, ge=0, le=23, description="Decision cutoff hour UTC on Day D-1"),
+    cutoff_minute: int = Query(0, ge=0, le=59, description="Decision cutoff minute UTC on Day D-1"),
     window_type: str = Query("decision", pattern="^(decision|delivery)$", description="decision (Jan 1-31 decisions) or delivery (Jan 1-31 delivery)"),
     resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$", description="hourly (aggregated) or half-hourly"),
     force_refresh: bool = Query(False, description="Force re-fetch from upstream API")
@@ -28,6 +30,7 @@ def get_overview(
     try:
         pipeline_service.run_pipeline(
             cutoff_hour_utc=cutoff_hour,
+            cutoff_minute_utc=cutoff_minute,
             window_type=window_type,
             resolution=resolution,
             force_refresh=force_refresh
@@ -42,6 +45,7 @@ def get_forecasts(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     cutoff_hour: int = Query(11, ge=0, le=23),
+    cutoff_minute: int = Query(0, ge=0, le=59),
     window_type: str = Query("decision", pattern="^(decision|delivery)$"),
     resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$")
 ):
@@ -50,6 +54,7 @@ def get_forecasts(
     """
     pipeline_service.run_pipeline(
         cutoff_hour_utc=cutoff_hour,
+        cutoff_minute_utc=cutoff_minute,
         window_type=window_type,
         resolution=resolution
     )
@@ -88,8 +93,11 @@ def get_forecasts(
             "status": r.get("status")
         })
 
+    cutoff_info = get_market_cutoff_info(cutoff_hour, cutoff_minute)
     return {
         "cutoff_hour_utc": cutoff_hour,
+        "cutoff_minute_utc": cutoff_minute,
+        "cutoff_info": cutoff_info,
         "count": len(results),
         "data": results
     }
@@ -98,6 +106,7 @@ def get_forecasts(
 @router.get("/accuracy")
 def get_accuracy_analysis(
     cutoff_hour: int = Query(11, ge=0, le=23),
+    cutoff_minute: int = Query(0, ge=0, le=59),
     window_type: str = Query("decision", pattern="^(decision|delivery)$"),
     resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$"),
     start_date: Optional[str] = Query(None),
@@ -109,6 +118,7 @@ def get_accuracy_analysis(
     """
     pipeline_service.run_pipeline(
         cutoff_hour_utc=cutoff_hour,
+        cutoff_minute_utc=cutoff_minute,
         window_type=window_type,
         resolution=resolution
     )
@@ -142,7 +152,9 @@ def get_accuracy_analysis(
                 "error_type": "OVER_FORECAST" if r["signed_error_mw"] > 0 else "UNDER_FORECAST"
             })
 
+    cutoff_info = get_market_cutoff_info(cutoff_hour, cutoff_minute)
     return {
+        "cutoff_info": cutoff_info,
         "metrics": metrics,
         "error_distribution": distribution,
         "largest_error_periods": top_errors
@@ -179,13 +191,15 @@ def get_forecast_history(
 def get_data_quality(
     window_type: str = Query("decision", pattern="^(decision|delivery)$"),
     resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$"),
-    cutoff_hour: int = Query(11, ge=0, le=23)
+    cutoff_hour: int = Query(11, ge=0, le=23),
+    cutoff_minute: int = Query(0, ge=0, le=59)
 ):
     """
     Returns data quality audit summary, record counts, and missing period counts.
     """
     pipeline_service.run_pipeline(
         cutoff_hour_utc=cutoff_hour,
+        cutoff_minute_utc=cutoff_minute,
         window_type=window_type,
         resolution=resolution
     )
@@ -219,6 +233,7 @@ def get_observations(
     min_error: Optional[float] = Query(None),
     max_error: Optional[float] = Query(None),
     cutoff_hour: int = Query(11, ge=0, le=23),
+    cutoff_minute: int = Query(0, ge=0, le=59),
     window_type: str = Query("decision", pattern="^(decision|delivery)$"),
     resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$")
 ):
@@ -227,6 +242,7 @@ def get_observations(
     """
     pipeline_service.run_pipeline(
         cutoff_hour_utc=cutoff_hour,
+        cutoff_minute_utc=cutoff_minute,
         window_type=window_type,
         resolution=resolution
     )
@@ -278,6 +294,7 @@ def get_observations(
 @router.get("/observations/export/csv")
 def export_observations_csv(
     cutoff_hour: int = Query(11, ge=0, le=23),
+    cutoff_minute: int = Query(0, ge=0, le=59),
     window_type: str = Query("decision", pattern="^(decision|delivery)$"),
     resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$")
 ):
@@ -287,6 +304,7 @@ def export_observations_csv(
     """
     pipeline_service.run_pipeline(
         cutoff_hour_utc=cutoff_hour,
+        cutoff_minute_utc=cutoff_minute,
         window_type=window_type,
         resolution=resolution
     )
@@ -330,7 +348,8 @@ def export_observations_csv(
         ])
 
     csv_data = output.getvalue()
-    filename = f"windforecast_analytics_jan2026_{window_type}_{resolution}_cutoff_{cutoff_hour}utc.csv"
+    cutoff_str = f"{cutoff_hour:02d}{cutoff_minute:02d}utc" if cutoff_minute else f"{cutoff_hour}utc"
+    filename = f"windforecast_analytics_jan2026_{window_type}_{resolution}_cutoff_{cutoff_str}.csv"
     
     return Response(
         content=csv_data,

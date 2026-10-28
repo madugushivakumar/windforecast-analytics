@@ -1,0 +1,27 @@
+{
+  "execution_timestamp_utc": "2026-10-28T07:09:54.798844+00:00",
+  "provenance": {
+    "overall": "DISK_CACHE",
+    "fuelhh_actuals": "DISK_CACHE",
+    "windfor_forecasts": "DISK_CACHE"
+  },
+  "record_counts": {
+    "actual_records_fetched": 30820,
+    "wind_actual_records_retained": 1541,
+    "forecast_records_fetched": 19856,
+    "invalid_generation_records_discarded": 0,
+    "duplicate_records_resolved": 4,
+    "missing_actual_periods": 0,
+    "missing_forecast_periods": 0,
+    "matched_periods": 744,
+    "total_expected_periods": 744,
+    "coverage_percentage": 100.0
+  },
+  "audit_notes": [
+    "Analysis Window: Decision Window (Decisions Jan 1-31 delivering Jan 2-Feb 1).",
+    "Resolution: Hourly (Mean actual MW of two half-hours vs 1-hour forecast).",
+    "Decision Cutoff: Configurable operational modelling assumption (11:00 UTC on Day D-1) representing a utility's late-morning procurement decision window (aligned with European SDAC reference; enables evaluating latest 10:30 UTC NESO forecast update). Note: Not an official GB exchange order book closure. [Type: operational_modelling_assumption, Official Exchange Closure: False].",
+    "Selected latest eligible WINDFOR vintage where publishTime <= cutoff timestamp.",
+    "Data Source Provenance: FUELHH=DISK_CACHE, WINDFOR=DISK_CACHE."
+  ]
+}

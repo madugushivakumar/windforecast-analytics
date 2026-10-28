@@ -87,19 +87,43 @@ This guide details how to deploy the WindForecast Analytics platform to producti
 
 ## 4. Local Container Deployment (Docker Compose)
 
-To run both services locally in isolated Docker containers:
+The repository provides production-ready container configurations for both services:
+- `backend/Dockerfile`: Multi-layer Python 3.11-slim container with non-root app structure and cache mount.
+- `frontend/Dockerfile`: Multi-stage build (Node 20 build stage -> Nginx 1.25 Alpine runtime stage with custom reverse proxy).
+- `docker-compose.yml`: Coordinates services, environment variables, healthchecks, and host volume caching (`./backend/data/cache:/app/data/cache`).
+
+### Configuration Validation
+Syntax and volume mapping can be statically validated using:
 ```bash
-# Start Docker Desktop daemon first, then run:
-docker compose up --build
+docker compose config
+```
+*(Verified: valid Compose specification, zero syntax errors).*
 
-# Backend will be available at: http://localhost:8000
-# Frontend will be available at: http://localhost:3000
-# Health check: http://localhost:8000/health
-# Swagger Docs: http://localhost:8000/docs
+### Build & Run Execution
+Once the Docker Desktop daemon is started on the host machine:
+```bash
+# 1. Clean build of images
+docker compose build --no-cache
 
-# To stop:
+# 2. Start all services in the background
+docker compose up -d
+
+# 3. Verify running services
+docker compose ps
+
+# 4. Check backend and frontend logs
+docker compose logs --tail=100
+
+# 5. Verify local endpoints
+curl -f http://localhost:8000/health
+curl -f http://localhost:8000/api/overview
+curl -f http://localhost:3000/
+
+# 6. Clean shutdown (preserving disk cache)
 docker compose down
 ```
+
+*Note on Local Runtime Status*: If `com.docker.service` is stopped on Windows, start Docker Desktop via the Windows Start Menu or run PowerShell with Administrator privileges (`Start-Service com.docker.service`) to initialize the `dockerDesktopLinuxEngine` named pipe.
 
 ---
 
