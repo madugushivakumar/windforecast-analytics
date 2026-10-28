@@ -48,6 +48,11 @@ def mock_pipeline_data():
         }
     ])
     pipeline_service.df_matched = test_df
+    pipeline_service.current_window_type = "decision"
+    pipeline_service.current_resolution = "hourly"
+    pipeline_service.selector.cutoff_hour_utc = 11
+    pipeline_service.target_year = 2026
+    pipeline_service.target_month = 1
     pipeline_service.df_clean_forecasts = pd.DataFrame([
         {"startTime": t1, "publishTime": datetime(2025, 12, 31, 10, 30, tzinfo=timezone.utc), "forecast_mw": 12500.0},
         {"startTime": t1, "publishTime": datetime(2026, 1, 1, 8, 0, tzinfo=timezone.utc), "forecast_mw": 12800.0},

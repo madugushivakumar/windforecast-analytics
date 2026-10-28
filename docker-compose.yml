@@ -16,7 +16,7 @@ services:
       - DEFAULT_CUTOFF_HOUR_UTC=11
       - ENABLE_CACHE=true
     volumes:
-      - ./data/cache:/app/data/cache
+      - ./backend/data/cache:/app/data/cache
     restart: unless-stopped
 
   frontend:

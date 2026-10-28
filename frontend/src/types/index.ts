@@ -40,7 +40,7 @@ export interface OverviewResponse {
 export interface ForecastRecord {
   startTime: string;
   settlementDate?: string;
-  settlementPeriod?: number;
+  settlementPeriod?: number | string;
   decisionCutoff: string;
   selectedPublishTime: string;
   leadTimeHours?: number;

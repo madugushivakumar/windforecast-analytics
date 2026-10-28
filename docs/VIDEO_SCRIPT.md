@@ -30,9 +30,9 @@
 ### 0:30–1:15 — The Overview Dashboard
 - **Screen**: Overview Dashboard tab (`/`). Hover over the 4 KPI cards and point out the time-series chart.
 - **Spoken Script**:
-  > "Here on the Overview Dashboard, we see our key performance indicators for all January 2026 delivery decisions.
-  > Over the 744 matched hourly delivery periods in January, our Day-Ahead forecasts had a **Mean Absolute Error (MAE) of 2,107 Megawatts**, and a **Root Mean Squared Error (RMSE) of 2,611 Megawatts**.
-  > Notice this crucial metric: our **Mean Signed Error—or Bias—is +1,839 Megawatts**. This confirms a systematic tendency to *over-forecast* wind generation during January 2026. For a day-ahead procurement desk, this means relying strictly on the raw model would have left the utility in a persistent short physical position, requiring costly intraday buy-backs.
+  > "Here on the Overview Dashboard, we see our key performance indicators for all January 2026 purchasing decisions—specifically decisions executed between January 1st and January 31st, delivering power from January 2nd through February 1st.
+  > Across the 744 matched hourly delivery periods, our Day-Ahead forecasts had a **Mean Absolute Error (MAE) of 2,013 Megawatts**, and a **Root Mean Squared Error (RMSE) of 2,506 Megawatts**.
+  > Notice this crucial metric: our **Mean Signed Error—or Bias—is +1,730 Megawatts**. This confirms a systematic tendency to *over-forecast* wind generation during January 2026. For a day-ahead procurement desk, this means relying strictly on the raw model would have left the utility in a persistent short physical position, requiring costly intraday buy-backs.
   > Below the KPIs, our interactive time-series directly overlays the official Elexon WINDFOR forecast in blue against the FUELHH wind actuals in green, allowing dispatchers to instantly spot sustained forecast divergence."
 
 ### 1:15–2:15 — Forecast Comparison & Vintage Lead-Time Inspection
@@ -48,21 +48,21 @@
 - **Spoken Script**:
   > "Moving to the Accuracy Analysis tab, we evaluate the statistical distribution of forecasting errors.
   > In wholesale electricity markets, capacity errors are settled in Megawatts. As shown in our histogram, the error distribution is heavily right-skewed, centered between +1,000 and +3,000 MW of over-forecasting.
-  > On the right, we transparently address percentage metrics: because UK wind generation can drop to very low levels, traditional percentage errors can become mathematically infinite. We therefore calculate a **Weighted Absolute Percentage Error (WAPE) of 16.4%**, alongside a conditional MAPE that strictly excludes near-zero lulls.
+  > On the right, we transparently address percentage metrics: because UK wind generation can drop to very low levels, traditional percentage errors can become mathematically infinite. We therefore calculate a **Weighted Absolute Percentage Error (WAPE) of 17.84%**, alongside a conditional MAPE that strictly excludes near-zero lulls.
   > Below, the Top 10 Discrepancy table highlights the most extreme forecast misses in January, allowing our risk managers to correlate specific weather events with commercial cash-out imbalance exposure."
 
 ### 3:15–4:15 — Data Explorer & Verified CSV Export
 - **Screen**: Navigate to **Data Explorer** tab. Demonstrate pagination, sorting by Signed Error, filtering to 'Matched', and clicking 'Export Analyzed Dataset (CSV)'.
 - **Spoken Script**:
-  > "For compliance, auditing, and quant research, the Data Explorer tab provides access to every single half-hour observation in January 2026.
+  > "For compliance, auditing, and quant research, the Data Explorer tab provides access to every single observation in January 2026.
   > Analysts can sort by signed error to immediately isolate extreme over- or under-forecasts, inspect the exact gate closure cutoff and publication timestamp, or filter by data quality status.
   > Most importantly, clicking **Export Analyzed Dataset** downloads the complete, verified analytical dataset in CSV format—delivering 100% transparency with zero fabricated records."
 
 ### 4:15–5:00 — Summary of Findings & Business Impact
 - **Screen**: Return to Overview page.
 - **Spoken Script**:
-  > "To summarize our findings: across January 2026, UK national wind day-ahead forecasts exhibited an MAE of 2,107 MW and a positive bias of +1,839 MW.
-  > By quantifying this over-forecasting trend and providing transparent visibility into forecast publication lead times, WindForecast Analytics equips our utility's energy traders to make informed bidding adjustments, reduce imbalance exposure, and protect wholesale procurement margins.
+  > "To summarize our findings: across January 2026 purchasing decisions, UK national wind day-ahead forecasts exhibited an MAE of 2,013 MW and a positive bias of +1,730 MW, with a WAPE of 17.84%.
+  > By quantifying this over-forecasting trend, enforcing strict decision-time cutoffs without lookahead bias, and reconciling hourly forecast and half-hourly actual data, WindForecast Analytics equips our utility's energy traders to make informed bidding adjustments, reduce imbalance exposure, and protect wholesale procurement margins.
   > Next, we'll turn to Part 2 for the technical architecture walkthrough."
 
 ---
@@ -98,24 +98,25 @@
 ### 2:15–3:00 — Matching Engine & Mathematical Metrics
 - **Screen**: Open `backend/app/services/matcher.py` and `backend/app/analytics/metrics.py`.
 - **Spoken Script**:
-  > "In `matcher.py`, forecasts and actuals are joined exclusively on the target delivery period timestamp `startTime`.
-  > Because WINDFOR national forecasts are published at hourly resolution while FUELHH records actuals half-hourly, our outer join identifies exactly 744 matched periods out of 1,488 half-hours, with the remaining 744 audited as `MISSING_FORECAST`. We never fabricate or interpolate unobserved half-hours.
-  > In `metrics.py`, we implemented pure, independently testable Python functions for signed error, MAE, RMSE, Mean Signed Error / Bias, Maximum Absolute Error, and Weighted Absolute Percentage Error. For percentage metrics, we enforce a conditional threshold of 100 MW on actuals to prevent mathematical division-by-zero singularities."
+  > "In `matcher.py`, forecasts and actuals are joined on the target delivery period timestamp `startTime`.
+  > To address the resolution difference—where WINDFOR forecasts are hourly and FUELHH actuals are half-hourly—our primary evaluation pairs each hourly forecast with the arithmetic mean of the two half-hourly actual power readings in that hour: $(A_{00} + A_{30})/2$. This yields 100% coverage across all 744 hours with zero fabricated forecasts.
+  > For full auditability, the underlying half-hour readings are retained, and users can toggle half-hourly mode where the 744 unforecasted half-hours are audited transparently as `MISSING_FORECAST`.
+  > In `metrics.py`, pure Python functions compute Signed Error, MAE, RMSE, Mean Signed Error / Bias, Maximum Absolute Error, and Weighted Absolute Percentage Error (WAPE), with conditional thresholding on actuals to protect against division-by-zero singularities."
 
 ### 3:00–4:00 — Automated Testing Suite & Code Quality
 - **Screen**: Terminal running `python -m pytest backend/tests -v` and `npm run test` in `frontend/`.
 - **Spoken Script**:
   > "Quality engineering is central to this project. Let's run our test suites:
   > First, the backend Pytest suite: running `python -m pytest backend/tests -v`.
-  > All 24 tests pass in 3.4 seconds. These tests verify hand-calculated mathematical examples, cutoff boundary conditions, post-cutoff forecast exclusion, duplicate resolution, and all FastAPI endpoints using mocked fixtures.
+  > All 31 tests pass in under 4 seconds, with an additional opt-in live Elexon API integration test available. These tests verify hand-calculated mathematical examples, cutoff boundary conditions, post-cutoff forecast exclusion, decision-date window selection, corrupted cache fallback, and all FastAPI endpoints.
   > Next, on the frontend: running `npm run test`.
-  > All 5 Vitest component tests pass cleanly. Furthermore, running `npm run build` verifies that the TypeScript codebase compiles with zero type errors or bundle issues."
+  > All 5 Vitest component tests pass cleanly. Furthermore, running `npm run build` verifies that the TypeScript codebase compiles with zero type errors and generates a clean production bundle."
 
 ### 4:00–5:00 — Docker Containerization, Deployment, & Engineering Trade-offs
 - **Screen**: Show `docker-compose.yml`, `backend/Dockerfile`, and `frontend/Dockerfile`.
 - **Spoken Script**:
   > "Finally, let's look at deployment.
-  > We containerized both services with multi-stage Dockerfiles. The frontend is built with Node.js and served via lightweight Nginx Alpine on port 3000, while the backend runs FastAPI via Uvicorn on port 8000 with Docker health checks. Both services orchestrate seamlessly via `docker compose up --build`.
+  > We containerized both services with multi-stage Dockerfiles. The frontend is built with Node.js and served via lightweight Nginx Alpine on port 3000, while the backend runs FastAPI via Uvicorn on port 8000 with Docker health checks and persistent cache volume mounts. Both services orchestrate seamlessly via `docker compose up --build`.
   > For production hosting, the React frontend is pre-configured for Vercel with SPA routing in `vercel.json`, and the backend includes a `Procfile` and environment configuration for Heroku or Render.
   > In terms of technical trade-offs: for a focused single-month dataset of ~1,500 periods, an in-memory Pandas pipeline with disk caching delivers sub-millisecond API response times without the maintenance or credential overhead of an external relational database.
   > WindForecast Analytics is fully tested, containerized, documented, and ready for production deployment. Thank you."
@@ -147,7 +148,7 @@
   5:30 - Elexon BMRS API Ingestion (FUELHH & WINDFOR Streams)
   6:15 - Data Cleaning & Decision-Time Cutoff Selection (D-1 11:00 UTC)
   7:00 - Matching Engine & Pure Mathematical Metrics
-  7:45 - Automated Test Suites (24 Pytest + 5 Vitest)
+  7:45 - Automated Test Suites (31 Pytest + 5 Vitest)
   8:45 - Docker Containerization & Deployment Architecture
 
   Repository: Public Anonymous GitHub Repository

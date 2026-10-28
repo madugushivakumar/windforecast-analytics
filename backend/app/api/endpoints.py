@@ -17,6 +17,8 @@ router = APIRouter(prefix="/api", tags=["Analytics"])
 @router.get("/overview", response_model=OverviewResponse)
 def get_overview(
     cutoff_hour: int = Query(11, ge=0, le=23, description="Decision cutoff hour UTC on Day D-1"),
+    window_type: str = Query("decision", pattern="^(decision|delivery)$", description="decision (Jan 1-31 decisions) or delivery (Jan 1-31 delivery)"),
+    resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$", description="hourly (aggregated) or half-hourly"),
     force_refresh: bool = Query(False, description="Force re-fetch from upstream API")
 ):
     """
@@ -24,7 +26,12 @@ def get_overview(
     for January 2026 Day-Ahead wind forecast performance.
     """
     try:
-        pipeline_service.run_pipeline(cutoff_hour_utc=cutoff_hour, force_refresh=force_refresh)
+        pipeline_service.run_pipeline(
+            cutoff_hour_utc=cutoff_hour,
+            window_type=window_type,
+            resolution=resolution,
+            force_refresh=force_refresh
+        )
         return pipeline_service.get_overview()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate overview analytics: {str(e)}")
@@ -34,12 +41,18 @@ def get_overview(
 def get_forecasts(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    cutoff_hour: int = Query(11, ge=0, le=23)
+    cutoff_hour: int = Query(11, ge=0, le=23),
+    window_type: str = Query("decision", pattern="^(decision|delivery)$"),
+    resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$")
 ):
     """
     Returns detailed forecast and actual time-series records for comparison charts.
     """
-    pipeline_service.run_pipeline(cutoff_hour_utc=cutoff_hour)
+    pipeline_service.run_pipeline(
+        cutoff_hour_utc=cutoff_hour,
+        window_type=window_type,
+        resolution=resolution
+    )
     df = pipeline_service.df_matched.copy()
     
     if df.empty:
@@ -85,6 +98,8 @@ def get_forecasts(
 @router.get("/accuracy")
 def get_accuracy_analysis(
     cutoff_hour: int = Query(11, ge=0, le=23),
+    window_type: str = Query("decision", pattern="^(decision|delivery)$"),
+    resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$"),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None)
 ):
@@ -92,7 +107,11 @@ def get_accuracy_analysis(
     Returns comprehensive quantitative accuracy metrics, error distributions,
     and extreme error periods.
     """
-    pipeline_service.run_pipeline(cutoff_hour_utc=cutoff_hour)
+    pipeline_service.run_pipeline(
+        cutoff_hour_utc=cutoff_hour,
+        window_type=window_type,
+        resolution=resolution
+    )
     df = pipeline_service.df_matched.copy()
 
     if start_date:
@@ -157,14 +176,21 @@ def get_forecast_history(
 
 
 @router.get("/data-quality", response_model=DataQualitySummary)
-def get_data_quality():
+def get_data_quality(
+    window_type: str = Query("decision", pattern="^(decision|delivery)$"),
+    resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$"),
+    cutoff_hour: int = Query(11, ge=0, le=23)
+):
     """
     Returns data quality audit summary, record counts, and missing period counts.
     """
+    pipeline_service.run_pipeline(
+        cutoff_hour_utc=cutoff_hour,
+        window_type=window_type,
+        resolution=resolution
+    )
     if pipeline_service.dq_summary is None:
-        pipeline_service.run_pipeline()
-    if pipeline_service.dq_summary is None:
-        # Fallback if pipeline ran with empty or mocked state
+        total_p = 744 if resolution == "hourly" else 1488
         return DataQualitySummary(
             actual_records_fetched=0,
             wind_actual_records_retained=0,
@@ -174,8 +200,8 @@ def get_data_quality():
             missing_actual_periods=0,
             missing_forecast_periods=0,
             matched_periods_count=len(pipeline_service.df_matched),
-            total_expected_periods=1488,
-            data_coverage_percentage=round((len(pipeline_service.df_matched) / 1488) * 100.0, 2),
+            total_expected_periods=total_p,
+            data_coverage_percentage=round((len(pipeline_service.df_matched) / total_p) * 100.0, 2),
             last_updated_utc=datetime.now(timezone.utc).isoformat(),
             data_source=pipeline_service.data_source,
             notes=["Data quality summary generated from active analysis dataset."]
@@ -192,12 +218,18 @@ def get_observations(
     status: Optional[str] = Query(None),
     min_error: Optional[float] = Query(None),
     max_error: Optional[float] = Query(None),
-    cutoff_hour: int = Query(11, ge=0, le=23)
+    cutoff_hour: int = Query(11, ge=0, le=23),
+    window_type: str = Query("decision", pattern="^(decision|delivery)$"),
+    resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$")
 ):
     """
     Paginated, filterable observations for Data Explorer view.
     """
-    pipeline_service.run_pipeline(cutoff_hour_utc=cutoff_hour)
+    pipeline_service.run_pipeline(
+        cutoff_hour_utc=cutoff_hour,
+        window_type=window_type,
+        resolution=resolution
+    )
     df = pipeline_service.df_matched.copy()
 
     if status:
@@ -223,7 +255,7 @@ def get_observations(
         rows.append({
             "startTime": r["startTime"].isoformat() if hasattr(r["startTime"], "isoformat") else str(r["startTime"]),
             "settlementDate": r.get("settlementDate"),
-            "settlementPeriod": int(r["settlementPeriod"]) if pd.notna(r.get("settlementPeriod")) else None,
+            "settlementPeriod": str(r.get("settlementPeriod")) if pd.notna(r.get("settlementPeriod")) else None,
             "decisionCutoff": r["decision_cutoff"].isoformat() if pd.notna(r.get("decision_cutoff")) and hasattr(r["decision_cutoff"], "isoformat") else str(r.get("decision_cutoff")),
             "selectedPublishTime": r["selected_publish_time"].isoformat() if pd.notna(r.get("selected_publish_time")) and hasattr(r["selected_publish_time"], "isoformat") else str(r.get("selected_publish_time")),
             "forecast_mw": float(r["forecast_mw"]) if pd.notna(r.get("forecast_mw")) else None,
@@ -244,12 +276,20 @@ def get_observations(
 
 
 @router.get("/observations/export/csv")
-def export_observations_csv(cutoff_hour: int = Query(11, ge=0, le=23)):
+def export_observations_csv(
+    cutoff_hour: int = Query(11, ge=0, le=23),
+    window_type: str = Query("decision", pattern="^(decision|delivery)$"),
+    resolution: str = Query("hourly", pattern="^(hourly|half-hourly)$")
+):
     """
     Exports all matched observations for the analyzed period as a downloadable CSV.
     Contains real analyzed records directly from the pipeline.
     """
-    pipeline_service.run_pipeline(cutoff_hour_utc=cutoff_hour)
+    pipeline_service.run_pipeline(
+        cutoff_hour_utc=cutoff_hour,
+        window_type=window_type,
+        resolution=resolution
+    )
     df = pipeline_service.df_matched.copy()
 
     output = io.StringIO()
@@ -290,7 +330,7 @@ def export_observations_csv(cutoff_hour: int = Query(11, ge=0, le=23)):
         ])
 
     csv_data = output.getvalue()
-    filename = f"windforecast_analytics_jan2026_cutoff_{cutoff_hour}utc.csv"
+    filename = f"windforecast_analytics_jan2026_{window_type}_{resolution}_cutoff_{cutoff_hour}utc.csv"
     
     return Response(
         content=csv_data,

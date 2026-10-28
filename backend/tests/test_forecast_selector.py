@@ -71,3 +71,57 @@ def test_forecast_history_vintages_auditing():
     assert vintages[0]["is_eligible"] is True
     assert vintages[1]["is_eligible"] is True
     assert vintages[2]["is_eligible"] is False
+
+
+def test_january_decision_window_boundaries():
+    """
+    Validates the January 2026 decision window boundaries:
+    - Decision window: 2026-01-01 00:00:00Z to 2026-02-01 00:00:00Z (exclusive)
+    - Delivery on 2026-01-01 -> decided 2025-12-31 (EXCLUDED from Jan decision analysis)
+    - Delivery on 2026-01-02 -> decided 2026-01-01 (INCLUDED)
+    - Delivery on 2026-02-01 -> decided 2026-01-31 (INCLUDED)
+    - Delivery on 2026-02-02 -> decided 2026-02-01 (EXCLUDED from Jan decision analysis)
+    """
+    from app.services.forecast_selector import is_decision_in_window
+    
+    win_start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    win_end = datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    # 1. Delivery on 2026-01-01 (decided 2025-12-31 11:00 UTC) -> False
+    deliv_jan1 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert is_decision_in_window(deliv_jan1, win_start, win_end) is False
+
+    # 2. Delivery on 2026-01-02 (decided 2026-01-01 11:00 UTC) -> True
+    deliv_jan2 = datetime(2026, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+    assert is_decision_in_window(deliv_jan2, win_start, win_end) is True
+
+    # 3. Delivery on 2026-02-01 (decided 2026-01-31 11:00 UTC) -> True
+    deliv_feb1 = datetime(2026, 2, 1, 23, 30, 0, tzinfo=timezone.utc)
+    assert is_decision_in_window(deliv_feb1, win_start, win_end) is True
+
+    # 4. Delivery on 2026-02-02 (decided 2026-02-01 11:00 UTC) -> False
+    deliv_feb2 = datetime(2026, 2, 2, 0, 0, 0, tzinfo=timezone.utc)
+    assert is_decision_in_window(deliv_feb2, win_start, win_end) is False
+
+
+def test_gate_closure_second_level_precision_and_lookahead_bias():
+    """
+    Ensures forecasts published strictly at or before cutoff (11:00:00) are eligible,
+    and any forecast published at 11:00:01 or later is excluded.
+    """
+    selector = ForecastSelector(cutoff_hour_utc=11)
+    deliv_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+    # Cutoff is 2026-01-14 11:00:00Z
+    data = [
+        {"startTime": deliv_time, "publishTime": datetime(2026, 1, 14, 10, 59, 59, tzinfo=timezone.utc), "forecast_mw": 5000.0},
+        {"startTime": deliv_time, "publishTime": datetime(2026, 1, 14, 11, 0, 0, tzinfo=timezone.utc), "forecast_mw": 5100.0},
+        {"startTime": deliv_time, "publishTime": datetime(2026, 1, 14, 11, 0, 1, tzinfo=timezone.utc), "forecast_mw": 9999.0},
+    ]
+    df_for = pd.DataFrame(data)
+    df_sel = selector.select_day_ahead_forecasts(df_for)
+
+    assert len(df_sel) == 1
+    # Latest eligible must be 11:00:00 (5100 MW), rejecting 11:00:01 (9999 MW)
+    assert df_sel.iloc[0]["forecast_mw"] == 5100.0
+    assert df_sel.iloc[0]["selected_publish_time"] == datetime(2026, 1, 14, 11, 0, 0, tzinfo=timezone.utc)

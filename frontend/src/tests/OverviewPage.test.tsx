@@ -29,32 +29,32 @@ describe("OverviewPage Component", () => {
   it("renders metrics and KPIs with valid data", () => {
     const mockData: OverviewResponse = {
       title: "WindForecast Analytics",
-      analysis_window: "January 2026 Day-Ahead Market",
+      analysis_window: "January 2026 Day-Ahead Market (Decision Window: Jan 1 - Jan 31)",
       decision_cutoff_rule: "Day D-1 at 11:00 UTC",
       metrics: {
         sample_size: 744,
-        mae_mw: 2107.18,
-        rmse_mw: 2611.24,
-        mean_signed_error_mw: 1839.92,
-        max_abs_error_mw: 6500.0,
-        min_signed_error_mw: -1200.0,
-        max_signed_error_mw: 6500.0,
-        error_std_mw: 1850.5,
-        wape_percentage: 16.4,
-        mape_percentage: 18.2,
+        mae_mw: 2013.01,
+        rmse_mw: 2505.94,
+        mean_signed_error_mw: 1729.93,
+        max_abs_error_mw: 6833.0,
+        min_signed_error_mw: -4128.0,
+        max_signed_error_mw: 6833.0,
+        error_std_mw: 1814.25,
+        wape_percentage: 17.84,
+        mape_percentage: 21.61,
         mape_note: "Computed safely",
         unit: "MW",
       },
-      coverage_percentage: 50.0,
-      total_delivery_periods: 1488,
+      coverage_percentage: 100.0,
+      total_delivery_periods: 744,
       matched_delivery_periods: 744,
-      missing_forecast_periods: 744,
+      missing_forecast_periods: 0,
       missing_actual_periods: 0,
       last_updated_utc: "2026-10-28T04:30:00Z",
-      data_source: "LIVE_API",
+      data_source: "DISK_CACHE",
       time_series_sample: [
         {
-          startTime: "2026-01-01T12:00:00Z",
+          startTime: "2026-01-02T12:00:00Z",
           forecast_mw: 15000,
           actual_mw: 13000,
           signed_error_mw: 2000,
@@ -67,9 +67,9 @@ describe("OverviewPage Component", () => {
     render(<OverviewPage data={mockData} loading={false} error={null} />);
 
     expect(screen.getByText(/January 2026 National Wind Outturn/i)).toBeInTheDocument();
-    expect(screen.getByText("2,107.18 MW")).toBeInTheDocument();
-    expect(screen.getByText("2,611.24 MW")).toBeInTheDocument();
-    expect(screen.getByText("+1,839.92 MW")).toBeInTheDocument();
-    expect(screen.getByText("744 / 1488")).toBeInTheDocument();
+    expect(screen.getByText("2,013.01 MW")).toBeInTheDocument();
+    expect(screen.getByText("2,505.94 MW")).toBeInTheDocument();
+    expect(screen.getByText("+1,729.93 MW")).toBeInTheDocument();
+    expect(screen.getByText("744 / 744")).toBeInTheDocument();
   });
 });

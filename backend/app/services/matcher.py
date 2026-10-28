@@ -7,18 +7,22 @@ logger = logging.getLogger("matcher")
 
 class Matcher:
     """
-    Matches selected forecasts with actual outturn generation strictly
-    on the target delivery period timestamp (startTime).
-    Calculates observation-level error fields.
+    Matches selected forecasts with actual outturn generation.
+    Supports two defensible evaluation resolutions:
+    1. 'hourly' (default): Aggregates half-hourly actuals to mean hourly power (MW)
+       to compare against the 1-hour WINDFOR product across the exact same 1-hour window.
+       Preserves individual half-hour outturn readings for full traceability.
+    2. 'half-hourly': Strictly matches on exact startTime without interpolation,
+       transparently preserving missing forecast periods on half-hours.
     """
     def match(
         self,
         df_selected_forecasts: pd.DataFrame,
-        df_clean_actuals: pd.DataFrame
+        df_clean_actuals: pd.DataFrame,
+        resolution: str = "hourly"
     ) -> Tuple[pd.DataFrame, Dict[str, int]]:
         """
-        Performs an outer join on startTime to retain full visibility of
-        matched observations, missing actuals, and missing forecasts.
+        Performs matching between selected forecasts and actuals.
         """
         if df_selected_forecasts.empty and df_clean_actuals.empty:
             empty_df = pd.DataFrame(columns=[
@@ -42,6 +46,34 @@ class Matcher:
         f_df.drop_duplicates(subset=["startTime"], keep="first", inplace=True)
         a_df.drop_duplicates(subset=["startTime"], keep="first", inplace=True)
 
+        if resolution == "hourly" and not a_df.empty:
+            # Group half-hourly actuals by 1-hour window
+            a_df["hour_start"] = pd.to_datetime(a_df["startTime"]).dt.floor("h")
+            
+            # Aggregate: arithmetic mean of the two half-hour MW generation readings
+            # Power in MW averaged over two 30-min intervals gives the mean hourly MW
+            grouped = a_df.groupby("hour_start")
+            agg_rows = []
+            for hour_dt, grp in grouped:
+                s_dates = grp["settlementDate"].dropna().tolist()
+                s_periods = grp["settlementPeriod"].dropna().tolist()
+                gens = grp["actual_mw"].tolist()
+                
+                period_str = f"P{min(s_periods)}-P{max(s_periods)}" if s_periods else None
+                s_date = s_dates[0] if s_dates else None
+                mean_mw = float(sum(gens) / len(gens)) if gens else 0.0
+                
+                agg_rows.append({
+                    "startTime": hour_dt,
+                    "settlementDate": s_date,
+                    "settlementPeriod": period_str,
+                    "actual_mw": round(mean_mw, 2),
+                    "actual_hh0_mw": gens[0] if len(gens) > 0 else None,
+                    "actual_hh1_mw": gens[1] if len(gens) > 1 else None,
+                    "hh_count": len(gens)
+                })
+            a_df = pd.DataFrame(agg_rows)
+
         actual_count = len(a_df)
         forecast_count = len(f_df)
 
@@ -49,10 +81,28 @@ class Matcher:
             a_df,
             f_df,
             on="startTime",
-            how="outer"
+            how="outer",
+            suffixes=("_actual", "_forecast")
         )
 
+        # Consolidate settlement date and period if present in both
+        if "settlementDate_actual" in merged.columns:
+            merged["settlementDate"] = merged["settlementDate_actual"].combine_first(merged.get("settlementDate_forecast", pd.Series()))
+        if "settlementPeriod_actual" in merged.columns:
+            merged["settlementPeriod"] = merged["settlementPeriod_actual"].combine_first(merged.get("settlementPeriod_forecast", pd.Series()))
+
         merged.sort_values(by="startTime", inplace=True)
+
+        # Ensure decision_date and decision_cutoff are populated for all rows
+        if not merged.empty:
+            start_times = pd.to_datetime(merged["startTime"])
+            deliv_dates = start_times.dt.date
+            derived_decision_dates = (deliv_dates - pd.Timedelta(days=1)).astype(str)
+            if "decision_date" not in merged.columns or merged["decision_date"].isna().any():
+                merged["decision_date"] = merged.get("decision_date", pd.Series(index=merged.index)).fillna(derived_decision_dates)
+            if "decision_cutoff" not in merged.columns or merged["decision_cutoff"].isna().any():
+                derived_cutoffs = pd.to_datetime(merged["decision_date"], utc=True) + pd.Timedelta(hours=11)
+                merged["decision_cutoff"] = merged.get("decision_cutoff", pd.Series(index=merged.index)).fillna(derived_cutoffs)
 
         # Classify status
         has_forecast = merged["forecast_mw"].notna()

@@ -22,7 +22,7 @@ def test_matcher_exact_join_and_errors():
         {"startTime": t3, "actual_mw": 11500.0, "settlementDate": "2026-01-01", "settlementPeriod": 27},
     ])
 
-    df_matched, counts = matcher.match(df_f, df_a)
+    df_matched, counts = matcher.match(df_f, df_a, resolution="half-hourly")
 
     assert counts["actual_periods"] == 2
     assert counts["forecast_periods"] == 2
@@ -36,3 +36,49 @@ def test_matcher_exact_join_and_errors():
     assert row_t1["signed_error_mw"] == 2000.0  # 12000 - 10000
     assert row_t1["abs_error_mw"] == 2000.0
     assert row_t1["squared_error_mw2"] == 4000000.0
+
+
+def test_matcher_hourly_aggregation():
+    """
+    Validates hourly aggregation:
+    Two half-hourly actuals (10,000 MW and 12,000 MW) in the same hour
+    must aggregate to arithmetic mean 11,000 MW.
+    Forecast of 11,500 MW should yield signed_error = +500 MW.
+    """
+    matcher = Matcher()
+    h_start = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_1 = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_2 = datetime(2026, 1, 5, 14, 30, 0, tzinfo=timezone.utc)
+
+    df_f = pd.DataFrame([
+        {
+            "startTime": h_start,
+            "forecast_mw": 11500.0,
+            "decision_date": "2026-01-04",
+            "decision_cutoff": datetime(2026, 1, 4, 11, 0, tzinfo=timezone.utc),
+            "selected_publish_time": datetime(2026, 1, 4, 10, 30, tzinfo=timezone.utc),
+            "lead_time_hours": 27.5
+        }
+    ])
+
+    df_a = pd.DataFrame([
+        {"startTime": hh_1, "actual_mw": 10000.0, "settlementDate": "2026-01-05", "settlementPeriod": 29},
+        {"startTime": hh_2, "actual_mw": 12000.0, "settlementDate": "2026-01-05", "settlementPeriod": 30},
+    ])
+
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+
+    assert counts["actual_periods"] == 1
+    assert counts["forecast_periods"] == 1
+    assert counts["matched_periods"] == 1
+
+    row = df_matched.iloc[0]
+    assert row["status"] == "MATCHED"
+    assert row["actual_mw"] == 11000.0
+    assert row["forecast_mw"] == 11500.0
+    assert row["signed_error_mw"] == 500.0
+    assert row["abs_error_mw"] == 500.0
+    # Audit traceability fields
+    assert row["actual_hh0_mw"] == 10000.0
+    assert row["actual_hh1_mw"] == 12000.0
+    assert row["hh_count"] == 2

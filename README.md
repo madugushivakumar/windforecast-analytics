@@ -1,6 +1,6 @@
 # WindForecast Analytics: UK National Wind Generation Day-Ahead Forecast Accuracy (January 2026)
 
-[![Backend Tests](https://img.shields.io/badge/Pytest-24%20passed-success)](./backend/tests)
+[![Backend Tests](https://img.shields.io/badge/Pytest-31%20passed-success)](./backend/tests)
 [![Frontend Tests](https://img.shields.io/badge/Vitest-5%20passed-success)](./frontend/src/tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Verified-blue)](./frontend)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](./backend)
@@ -27,7 +27,10 @@ Because wind generation is weather-dependent and highly intermittent, commercial
 - **Authoritative Elexon BMRS Ingestion**: Connects directly to official Elexon Insights Solution stream endpoints for `FUELHH` (outturn generation) and `WINDFOR` (day-ahead national wind forecasts) with bounded 7-day chunking, exponential backoff retries, and local disk cache fallback.
 - **Strict Fuel Filtering**: Filters `FUELHH` generation strictly to `fuelType == 'WIND'`, discarding all conventional, nuclear, and interconnection flows.
 - **Day-Ahead Decision Cutoff Enforcement**: Enforces market gate closure rules (default: 11:00 UTC on day $D-1$). Only forecasts published strictly prior to or at gate closure (`publishTime <= cutoffTime`) are eligible. The latest eligible vintage is selected with zero future lookahead.
-- **Exact Delivery Alignment**: Forecasts and actuals are matched exclusively on delivery start times (`startTime`).
+- **January 2026 Decision-Date Window Filtering**: Evaluates all purchasing decisions made between `2026-01-01 00:00:00 UTC` and `2026-02-01 00:00:00 UTC` (exclusive), corresponding to deliveries from `2026-01-02 00:00:00 UTC` through `2026-02-01 23:00:00 UTC` (or `23:30:00 UTC` half-hourly).
+- **Dual Resolution Alignment**:
+  - **Hourly Aggregated Evaluation (Primary / Evaluated)**: Pairs hourly WINDFOR forecasts with arithmetic-mean actual generation across the two half-hours in that hour: $A_H = \frac{A_{H:00} + A_{H:30}}{2} \text{ MW}$, yielding 100.0% coverage across all 744 hours in the 31-day delivery span.
+  - **Half-Hourly Granular Evaluation (Transparency Mode)**: Evaluates forecasts strictly against the matching `:00` half-hour, transparently reporting the 744 `:30` periods as `MISSING_FORECAST` (50.0% coverage) with zero artificial interpolation.
 - **Pure Mathematical Metric Calculations**: Hand-calculated and automated unit tests for:
   - **Mean Absolute Error (MAE)**: Measures average expected forecast error magnitude in MW.
   - **Root Mean Squared Error (RMSE)**: Penalizes severe forecasting misses in MW.
@@ -35,11 +38,11 @@ Because wind generation is weather-dependent and highly intermittent, commercial
   - **Weighted Absolute Percentage Error (WAPE)**: Safe aggregate percentage error without division-by-zero singularities.
   - **Conditional MAPE**: Explicitly documents and filters near-zero actual generation lulls ($A_t < 100 \text{ MW}$) to prevent infinite percentage distortions.
 - **Interactive Enterprise React Frontend**:
-  - **Page A (Overview Dashboard)**: Executive KPIs, full-month forecast vs. actual outturn time-series chart, data coverage health indicator, and commercial market interpretations.
+  - **Page A (Overview Dashboard)**: Executive KPIs, full-month forecast vs. actual outturn time-series chart, data coverage health indicator, resolution mode toggle, and commercial market interpretations.
   - **Page B (Forecast Comparison)**: Delivery window date filter, week presets, interactive time-series zoom, and a **Forecast Vintage History Inspector** revealing all published forecast runs and gate closure eligibility.
   - **Page C (Accuracy Analysis)**: Error distribution histogram, residual error trends, and top 10 largest absolute error discrepancy periods.
   - **Page D (Data Explorer)**: Paginated, multi-column sortable, filterable table of delivery periods, cutoffs, forecasts, actuals, signed errors, and direct CSV export of verified analyzed records.
-- **Data Quality Audit Trail**: Full accounting of records fetched, wind records retained, duplicates resolved, missing actuals, and missing forecasts.
+- **Data Quality Audit Trail & Provenance**: Full accounting of records fetched, wind records retained, duplicates resolved, missing actuals, missing forecasts, and explicit data source provenance (`DISK_CACHE`, `LIVE_API`, `MIXED_CACHE_API`).
 
 ---
 
@@ -50,8 +53,8 @@ Because wind generation is weather-dependent and highly intermittent, commercial
 | **Frontend** | React 18, TypeScript, Vite, Recharts, Lucide Icons | High-performance SPA with modern dark glassmorphism design, responsive layouts, and interactive time-series visualizations. |
 | **Backend** | Python 3.11, FastAPI, Pandas, HTTPX, Pydantic v2 | Authoritative analytics engine, robust async HTTP client, and automatic OpenAPI documentation. |
 | **Data Cleaning** | Pandas, Timezone-aware UTC datetimes | Efficient vector joins, deterministic duplicate resolution, and strict data quality auditing. |
-| **Testing** | Pytest, Vitest, React Testing Library, JSDOM | 24 backend tests and 5 frontend component tests with hand-calculated validation cases. |
-| **Containerization** | Docker, Docker Compose, Nginx Alpine | Multi-stage reproducible container builds with health checks. |
+| **Testing** | Pytest, Vitest, React Testing Library, JSDOM | 31 backend Pytest tests, 1 opt-in live integration test, and 5 frontend Vitest tests. |
+| **Containerization** | Docker, Docker Compose, Nginx Alpine | Multi-stage reproducible container builds with health checks and corrected cache volume mounts. |
 | **Deployment** | Vercel (Frontend), Heroku / Render (Backend) | Production-ready with SPA client-side routing and CORS configuration. |
 
 ---
@@ -69,7 +72,7 @@ graph TD
         Cache["Disk & In-Memory Pipeline Cache (data/cache/)"]
         Cleaner["DataCleaner (Fuel filtering, deduplication, DQ audit)"]
         Selector["ForecastSelector (Day-Ahead Cutoff D-1 11:00 UTC)"]
-        Matcher["Matcher (Delivery period startTime alignment)"]
+        Matcher["Matcher (Delivery period startTime alignment & hourly aggregation)"]
         Analytics["AnalyticsEngine (MAE, RMSE, Bias, distributions)"]
         FastAPI["FastAPI REST Endpoints (/api/*, /health)"]
     end
@@ -117,8 +120,8 @@ WindForecast Analytics queries the live official Elexon Insights Solution (BMRS)
 
 ## 6. January 2026 Scope & Decision Cutoff Rules
 
-- **Delivery Window**: January 1, 2026 00:00 UTC through January 31, 2026 23:30 UTC.
-- **Decision Window**: Purchasing decisions executed in January 2026 (starting from December 31, 2025 at 11:00 UTC for delivery on January 1, 2026, through January 31, 2026 at 11:00 UTC for delivery on February 1, 2026).
+- **Decision-Date Window (Primary Focus)**: Purchasing decisions executed in January 2026 (`2026-01-01 00:00:00 UTC` through `2026-02-01 00:00:00 UTC` exclusive). Under the Day-Ahead rule, decisions made on January 1 deliver on January 2; decisions made on January 31 deliver on February 1. Decisions executed on December 31 (delivering on January 1) belong to December 2025 commercial decisions and are excluded.
+- **Delivery Window (Alternative Toggle)**: Half-hour delivery periods occurring within January 2026 (`2026-01-01 00:00:00 UTC` through `2026-01-31 23:30:00 UTC`).
 - **Gate Closure Cutoff Logic**:
   - For delivery on Day $D$, day-ahead wholesale auction orders close on Day $D-1$.
   - **Default Cutoff**: **11:00 UTC on Day $D-1$** (EPEX SPOT UK Day-Ahead Auction).
@@ -128,14 +131,15 @@ WindForecast Analytics queries the live official Elexon Insights Solution (BMRS)
 
 ---
 
-## 7. Data Cleaning & Matching Methodology
+## 7. Data Cleaning & Resolution Alignment Methodology
 
 1. **Timezone Normalization**: All incoming timestamps are parsed and converted to timezone-aware UTC datetime objects (`datetime.timezone.utc`).
 2. **Negative & Malformed Record Detection**: Records with negative generation or unparseable values are audited and dropped.
 3. **Deterministic Duplicate Resolution**: If multiple records exist for identical delivery `startTime`, the record with the latest `publishTime` is retained, and a duplicate event is logged in the Data Quality report.
-4. **Exact Delivery Matching**: Forecasts and actuals are joined exclusively on normalized `startTime`.
-   - **Resolution Finding**: In January 2026, `FUELHH` reports 30-minute settlement periods (1,488 half-hours). `WINDFOR` national forecasts are published at hourly resolution (744 periods).
-   - **Matching Outcome**: The engine matches all 744 hourly delivery periods ($N=744$) with 100% mathematical integrity. The remaining 744 un-forecasted half-hours are audited as `MISSING_FORECAST` without interpolating unobserved values.
+4. **Resolution Finding & Alignment**:
+   - In January 2026, `FUELHH` reports 30-minute settlement periods (1,488 half-hours), while `WINDFOR` national forecasts are published at hourly resolution (`:00`). Both streams report power in **Megawatts (MW)**.
+   - **Hourly Aggregated Evaluation (Primary / Evaluated)**: Pairs each hourly forecast with the arithmetic-mean actual generation across the two half-hours in that hour: $A_H = \frac{A_{H:00} + A_{H:30}}{2} \text{ MW}$. This achieves **100.0% coverage across all 744 hours** in the 31-day delivery span without making unsupported assumptions. The underlying `:00` and `:30` half-hour actuals are preserved for full auditability.
+   - **Half-Hourly Granular Mode (Transparency Mode)**: Evaluates forecasts strictly against the matching `:00` half-hour, transparently reporting the 744 `:30` periods as `MISSING_FORECAST` (50.0% coverage) with zero artificial interpolation.
 
 ---
 
@@ -153,13 +157,30 @@ Let $F_t$ = Day-Ahead forecast generation for delivery period $t$, $A_t$ = Actua
   $$\text{WAPE} = \frac{\sum_{t=1}^N |F_t - A_t|}{\sum_{t=1}^N A_t} \times 100\%$$
 - **Conditional MAPE**: Evaluated strictly on periods where $A_t \ge 100 \text{ MW}$ to avoid dividing by near-zero wind lull observations.
 
-### Verified January 2026 Results (Day-Ahead 11:00 UTC D-1 Cutoff)
-- **Sample Size ($N$)**: 744 matched hourly delivery periods
-- **Mean Absolute Error (MAE)**: **2,107.18 MW**
-- **Root Mean Squared Error (RMSE)**: **2,611.24 MW**
-- **Mean Signed Error (Bias)**: **+1,839.92 MW** (Systematic over-forecasting)
-- **WAPE**: **16.4%**
-- **Data Source**: Elexon BMRS API (`LIVE_API` / `DISK_CACHE`)
+### Verified January 2026 Results (Day-Ahead 11:00 UTC D-1 Cutoff, Decision Window)
+
+#### Primary Evaluated Mode: Hourly Aggregation
+- **Decision Window**: `2026-01-01 00:00:00 UTC` to `2026-02-01 00:00:00 UTC` (exclusive)
+- **Delivery Span**: `2026-01-02 00:00:00 UTC` to `2026-02-01 23:00:00 UTC`
+- **Sample Size ($N$)**: **744 matched hourly delivery periods** (100.0% coverage of 744 expected hours)
+- **Mean Absolute Error (MAE)**: **2,013.01 MW**
+- **Root Mean Squared Error (RMSE)**: **2,505.94 MW**
+- **Mean Signed Error (Bias)**: **+1,729.93 MW** (Systematic over-forecasting)
+- **Maximum Absolute Error**: **6,833.00 MW**
+- **Minimum Signed Error**: **-4,128.00 MW**
+- **Maximum Signed Error**: **+6,833.00 MW**
+- **Error Standard Deviation**: **1,814.25 MW**
+- **WAPE**: **17.84%** (Total Absolute Error: 1,497,682 MW / Total Generation: 8,396,971 MW)
+- **Conditional MAPE**: **21.61%** (744/744 periods with $A_t \ge 100 \text{ MW}$)
+- **Data Source**: Elexon BMRS API (`DISK_CACHE` / `LIVE_API`)
+
+#### Transparency Mode: Half-Hourly Granular
+- **Sample Size ($N$)**: 744 matched half-hours (50.0% coverage of 1,488 expected periods; 744 unforecasted `:30` periods)
+- **MAE**: **1,995.57 MW**
+- **RMSE**: **2,498.82 MW**
+- **Bias**: **+1,727.98 MW**
+- **Maximum Absolute Error**: **6,857.00 MW**
+- **WAPE**: **17.68%**
 
 ---
 
@@ -312,7 +333,7 @@ docker compose up --build
 ```bash
 python -m pytest backend/tests -v
 ```
-*Expected: 24 passed (100%).*
+*Expected: 31 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
 
 ### Run Frontend Tests (Vitest)
 ```bash

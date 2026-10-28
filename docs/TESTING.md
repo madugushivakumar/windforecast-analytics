@@ -23,10 +23,10 @@ python -m pytest backend/tests -v
 ```
 
 **Results**:
-- **Total Test Cases**: 24
-- **Passed**: 24 (100%)
+- **Total Test Cases**: 32 (31 deterministic + 1 opt-in live test)
+- **Passed**: 31 (100% of deterministic suite; 32 passed when live API opt-in is enabled)
 - **Failed**: 0
-- **Duration**: 3.40 seconds
+- **Duration**: ~3.8 seconds
 
 | Test File | Test Name | Target Behavior | Result |
 |---|---|---|---|
@@ -45,7 +45,15 @@ python -m pytest backend/tests -v
 | `test_forecast_selector.py` | `test_forecast_selector_excludes_post_cutoff_forecasts` | Strictly excludes forecasts published after gate closure | **PASSED** |
 | `test_forecast_selector.py` | `test_forecast_selector_empty_when_no_eligible_forecast` | Flags missing forecast when no pre-cutoff vintage exists | **PASSED** |
 | `test_forecast_selector.py` | `test_forecast_history_vintages_auditing` | Preserves all forecast runs and tags eligibility | **PASSED** |
+| `test_forecast_selector.py` | `test_january_decision_window_boundaries` | Boundary test for Dec 31, Jan 1, Jan 31, and Feb 1 decision dates | **PASSED** |
+| `test_forecast_selector.py` | `test_gate_closure_second_level_precision_and_lookahead_bias` | Second-level precision test for 11:00:00 vs 11:00:01 publication | **PASSED** |
 | `test_matcher.py` | `test_matcher_exact_join_and_errors` | Joins strictly on delivery `startTime`, flags unmatched | **PASSED** |
+| `test_matcher.py` | `test_matcher_hourly_aggregation` | Evaluates arithmetic mean of half-hour power readings with full audit columns | **PASSED** |
+| `test_provenance_and_pipeline.py` | `test_provenance_labeling_disk_cache` | Asserts exact `DISK_CACHE` label when reading from disk | **PASSED** |
+| `test_provenance_and_pipeline.py` | `test_corrupted_cache_fallback` | Validates fallback to live stream on empty/corrupt cache | **PASSED** |
+| `test_provenance_and_pipeline.py` | `test_pipeline_decision_date_window_selection` | Verifies 744 hours delivery from Jan 1-31 decisions (delivering Jan 2-Feb 1) | **PASSED** |
+| `test_provenance_and_pipeline.py` | `test_pipeline_half_hourly_resolution_transparency` | Verifies transparent reporting of 744 unforecasted half-hours (50% coverage) | **PASSED** |
+| `test_provenance_and_pipeline.py` | `test_live_elexon_api_integration` | Opt-in live smoke test against `data.elexon.co.uk` | **PASSED** (Opt-in) |
 | `test_api.py` | `test_root_endpoint` | Verifies root service metadata | **PASSED** |
 | `test_api.py` | `test_health_endpoint` | Distinguishes app health from upstream Elexon API | **PASSED** |
 | `test_api.py` | `test_overview_endpoint` | Verifies overview KPIs, sample size, and MAE | **PASSED** |
@@ -66,7 +74,7 @@ npm run test
 **Results**:
 - **Test Files**: 3 passed
 - **Tests**: 5 passed (100%)
-- **Duration**: 7.60 seconds
+- **Duration**: ~2.5 seconds
 
 | Test File | Test Case | Target Behavior | Result |
 |---|---|---|---|
@@ -83,7 +91,7 @@ npm run test
 ```bash
 npm run build
 ```
-**Result**: **SUCCESS** (Built production bundle in 5.99s with TypeScript validation).
+**Result**: **SUCCESS** (Built production bundle with zero TypeScript errors).
 
 ---
 
@@ -93,10 +101,10 @@ npm run build
 |---|---|---|---|
 | **AC-01** | Actual records are filtered strictly to `fuelType = 'WIND'` | Inspected `DataCleaner.clean_fuelhh_actuals` and pipeline output. No other fuels appear in wind actuals. | **VERIFIED** |
 | **AC-02** | Forecasts and actuals align strictly by delivery period (`startTime`) | Inspected `Matcher.match` join logic; verified delivery periods match hour-for-hour. | **VERIFIED** |
-| **AC-03** | No forecast published after the selected decision cutoff is used | Verified via `test_forecast_selector_excludes_post_cutoff_forecasts`. `publishTime <= cutoffTime` is strictly enforced. | **VERIFIED** |
-| **AC-04** | January 2026 scope is applied correctly | Ingested full January 2026 delivery window (`2026-01-01 00:00:00Z` to `2026-01-31 23:30:00Z`). | **VERIFIED** |
-| **AC-05** | Metrics use correct matched sample ($N=744$) | Real January 2026 calculations: MAE = 2,107.18 MW, RMSE = 2,611.24 MW, Bias = +1,839.92 MW on $N=744$. | **VERIFIED** |
-| **AC-06** | Missing records are visible and audited | 744 missing half-hour forecast periods transparently reported (reflecting hourly forecast vs 30-min actuals). | **VERIFIED** |
+| **AC-03** | No forecast published after the selected decision cutoff is used | Verified via `test_forecast_selector_excludes_post_cutoff_forecasts` and second-level precision boundary tests. | **VERIFIED** |
+| **AC-04** | January 2026 decision window scope is applied correctly | Ingested decisions between `2026-01-01 00:00:00Z` and `2026-02-01 00:00:00Z` (delivering `2026-01-02` to `2026-02-01 23:00:00Z` or `23:30:00Z`). | **VERIFIED** |
+| **AC-05** | Metrics use correct matched sample ($N=744$) | Real January 2026 calculations: MAE = 2,013.01 MW, RMSE = 2,505.94 MW, Bias = +1,729.93 MW, WAPE = 17.84% on $N=744$ hours. | **VERIFIED** |
+| **AC-06** | Missing records are visible and audited | Hourly aggregation achieves 100% coverage ($N=744$); half-hourly mode transparently audits 744 unforecasted periods. | **VERIFIED** |
 | **AC-07** | Dashboard matches backend calculations | Overview page KPIs directly read Pydantic schema from `/api/overview`. | **VERIFIED** |
 | **AC-08** | App remains usable when API is offline | Implemented local disk caching fallback in `data/cache/`. | **VERIFIED** |
 | **AC-09** | CSV export contains actual analyzed records | Verified `/api/observations/export/csv` generates real CSV with delivery times, forecast, actual, and errors. | **VERIFIED** |

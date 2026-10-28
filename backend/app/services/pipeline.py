@@ -29,6 +29,8 @@ class AnalyticsPipeline:
     Central orchestration engine for WindForecast Analytics.
     Coordinates data ingestion, cleaning, cutoff selection, matching,
     and metrics computation with in-memory caching.
+    Supports both decision-date window (primary) and delivery-date window,
+    as well as hourly aggregation (primary) and half-hourly resolution.
     """
     def __init__(self, elexon_client: Optional[ElexonApiClient] = None):
         self.client = elexon_client or ElexonApiClient()
@@ -36,7 +38,7 @@ class AnalyticsPipeline:
         self.selector = ForecastSelector(cutoff_hour_utc=settings.DEFAULT_CUTOFF_HOUR_UTC)
         self.matcher = Matcher()
         
-        # In-memory cached artifacts
+        # In-memory cached artifacts and state
         self.raw_actuals: List[Dict[str, Any]] = []
         self.raw_forecasts: List[Dict[str, Any]] = []
         self.df_clean_actuals: pd.DataFrame = pd.DataFrame()
@@ -45,43 +47,63 @@ class AnalyticsPipeline:
         self.dq_summary: Optional[DataQualitySummary] = None
         self.last_run_utc: Optional[str] = None
         self.data_source: str = "UNINITIALIZED"
+        self.current_window_type: str = "decision"
+        self.current_resolution: str = "hourly"
+        self.target_year: int = 2026
+        self.target_month: int = 1
 
     def run_pipeline(
         self,
         target_year: int = 2026,
         target_month: int = 1,
         cutoff_hour_utc: int = 11,
+        window_type: str = "decision",
+        resolution: str = "hourly",
         force_refresh: bool = False
     ) -> pd.DataFrame:
         """
-        Executes the full analytics pipeline for the specified target month.
+        Executes the full analytics pipeline for the specified parameters.
+        - window_type: 'decision' (January 2026 purchasing decisions, delivering Jan 2 to Feb 1)
+                       or 'delivery' (January 2026 delivery periods, Jan 1 to Jan 31)
+        - resolution: 'hourly' (mean actual MW of the two half-hours vs 1-hour forecast)
+                      or 'half-hourly' (raw :00 join with :30 marked MISSING_FORECAST)
         """
         # Check if already loaded for same parameters
-        if not force_refresh and not self.df_matched.empty and self.selector.cutoff_hour_utc == cutoff_hour_utc:
+        if (
+            not force_refresh
+            and not self.df_matched.empty
+            and self.selector.cutoff_hour_utc == cutoff_hour_utc
+            and self.current_window_type == window_type
+            and self.current_resolution == resolution
+            and self.target_year == target_year
+            and self.target_month == target_month
+        ):
             logger.info("Returning cached in-memory analysis dataset.")
             return self.df_matched
 
         self.selector.cutoff_hour_utc = cutoff_hour_utc
+        self.current_window_type = window_type
+        self.current_resolution = resolution
+        self.target_year = target_year
+        self.target_month = target_month
 
-        # Define time windows
-        # Delivery starts 2026-01-01 00:00:00Z and runs to 2026-02-01 23:30:00Z
+        # Define delivery date range covering both decision window and delivery window:
+        # For January decisions (Jan 1 to Jan 31), delivery spans Jan 2 00:00 UTC to Feb 1 23:30 UTC.
+        # For January deliveries, delivery spans Jan 1 00:00 UTC to Jan 31 23:30 UTC.
+        # Ingesting from Jan 1 00:00:00Z to Feb 1 23:59:59Z covers all required periods.
         delivery_start = datetime(target_year, target_month, 1, 0, 0, 0, tzinfo=timezone.utc)
-        # Next month boundary
-        if target_month == 12:
-            delivery_end = datetime(target_year + 1, 1, 1, 23, 59, 59, tzinfo=timezone.utc)
-        else:
-            delivery_end = datetime(target_year, target_month + 1, 1, 23, 59, 59, tzinfo=timezone.utc)
-            
-        # Ingest forecasts starting 2 days prior to capture day-ahead forecasts for Jan 1
+        delivery_end = datetime(target_year, target_month + 1, 1, 23, 59, 59, tzinfo=timezone.utc) if target_month < 12 else datetime(target_year + 1, 1, 1, 23, 59, 59, tzinfo=timezone.utc)
+
+        # Forecast ingest window: begins 2 days prior to delivery_start to capture all D-1 Day-Ahead forecasts
         forecast_ingest_start = delivery_start - timedelta(days=2)
         forecast_ingest_end = delivery_end
 
-        logger.info(f"Ingesting FUELHH actuals from {delivery_start.isoformat()} to {delivery_end.isoformat()}")
-        actuals_raw = self.client.fetch_fuelhh(delivery_start, delivery_end)
+        logger.info(f"Ingesting FUELHH actuals for delivery {delivery_start.isoformat()} to {delivery_end.isoformat()}")
+        actuals_raw = self.client.fetch_fuelhh(delivery_start, delivery_end, use_cache=not force_refresh)
         self.raw_actuals = actuals_raw
 
         logger.info(f"Ingesting WINDFOR forecasts from {forecast_ingest_start.isoformat()} to {forecast_ingest_end.isoformat()}")
-        forecasts_raw = self.client.fetch_windfor(forecast_ingest_start, forecast_ingest_end)
+        forecasts_raw = self.client.fetch_windfor(forecast_ingest_start, forecast_ingest_end, use_cache=not force_refresh)
         self.raw_forecasts = forecasts_raw
 
         # Step 2: Clean and validate
@@ -94,24 +116,59 @@ class AnalyticsPipeline:
         # Step 3: Select Day-Ahead forecasts published <= cutoff
         df_selected_forecasts = self.selector.select_day_ahead_forecasts(df_for, cutoff_hour_utc=cutoff_hour_utc)
 
-        # Step 4: Match on startTime
-        df_matched, match_counts = self.matcher.match(df_selected_forecasts, df_act)
+        # Step 4: Match on startTime with specified resolution
+        df_matched, match_counts = self.matcher.match(df_selected_forecasts, df_act, resolution=resolution)
 
-        # Filter matched view strictly to target month delivery periods (Jan 1 00:00 to Jan 31 23:30)
-        month_end = datetime(target_year, target_month + 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        mask_month = (df_matched["startTime"] >= delivery_start) & (df_matched["startTime"] < month_end)
-        self.df_matched = df_matched.loc[mask_month].copy()
+        # Step 5: Filter strictly according to requested window_type
+        if window_type == "decision":
+            # Purchasing decisions made in target month: 2026-01-01 <= decision_date <= 2026-01-31
+            # Delivering from 2026-01-02 00:00:00Z through 2026-02-01 23:59:59Z
+            start_dec_str = f"{target_year}-{target_month:02d}-01"
+            if target_month == 12:
+                end_dec_str = f"{target_year + 1}-01-01"
+            else:
+                end_dec_str = f"{target_year}-{target_month + 1:02d}-01"
+            
+            mask_window = (df_matched["decision_date"] >= start_dec_str) & (df_matched["decision_date"] < end_dec_str)
+            self.df_matched = df_matched.loc[mask_window].copy()
+        else:
+            # Delivery window: delivery periods delivered in target month (Jan 1 00:00:00Z to Jan 31 23:59:59Z)
+            month_end = datetime(target_year, target_month + 1, 1, 0, 0, 0, tzinfo=timezone.utc) if target_month < 12 else datetime(target_year + 1, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            mask_window = (df_matched["startTime"] >= delivery_start) & (df_matched["startTime"] < month_end)
+            self.df_matched = df_matched.loc[mask_window].copy()
 
-        # Step 5: Build Data Quality Summary
-        total_expected_half_hours = 31 * 48  # 1,488 half-hours in January (non-clock-change)
-        matched_in_month = int((self.df_matched["status"] == "MATCHED").sum())
+        # Step 6: Build Data Quality Summary
+        days_in_month = 31  # January
+        if resolution == "hourly":
+            total_expected_periods = days_in_month * 24  # 744 hours
+        else:
+            total_expected_periods = days_in_month * 48  # 1,488 half-hours
+
+        matched_in_window = int((self.df_matched["status"] == "MATCHED").sum())
         missing_act = int((self.df_matched["status"] == "MISSING_ACTUAL").sum())
         missing_fc = int((self.df_matched["status"] == "MISSING_FORECAST").sum())
         
-        coverage_pct = round((matched_in_month / total_expected_half_hours) * 100.0, 2)
+        coverage_pct = round((matched_in_window / total_expected_periods) * 100.0, 2)
 
         self.last_run_utc = datetime.now(timezone.utc).isoformat()
-        self.data_source = "LIVE_API" if settings.ENABLE_CACHE else "LIVE_API_STREAM"
+        
+        # Real provenance tracking: check cache vs live API from client
+        fuel_prov = self.client.get_dataset_provenance("FUELHH")
+        wind_prov = self.client.get_dataset_provenance("WINDFOR")
+        if fuel_prov == "DISK_CACHE" and wind_prov == "DISK_CACHE":
+            self.data_source = "DISK_CACHE"
+        elif fuel_prov == "LIVE_API" and wind_prov == "LIVE_API":
+            self.data_source = "LIVE_API"
+        else:
+            self.data_source = f"{fuel_prov}/{wind_prov}"
+
+        notes = [
+            f"Analysis Window: {window_type.capitalize()} Window ({'Decisions Jan 1-31 delivering Jan 2-Feb 1' if window_type == 'decision' else 'Delivery Jan 1-31'}).",
+            f"Resolution: {resolution.capitalize()} ({'Mean actual MW of two half-hours vs 1-hour forecast' if resolution == 'hourly' else 'Exact half-hourly join'}).",
+            f"Evaluated Day-Ahead gate closure cutoff at {cutoff_hour_utc}:00 UTC (D-1).",
+            f"Selected latest eligible WINDFOR vintage where publishTime <= cutoff.",
+            f"Data Source Provenance: FUELHH={fuel_prov}, WINDFOR={wind_prov}."
+        ]
 
         self.dq_summary = DataQualitySummary(
             actual_records_fetched=act_stats["fetched"],
@@ -121,16 +178,12 @@ class AnalyticsPipeline:
             duplicate_records_resolved=act_stats["duplicates"] + for_stats["duplicates"],
             missing_actual_periods=missing_act,
             missing_forecast_periods=missing_fc,
-            matched_periods_count=matched_in_month,
-            total_expected_periods=total_expected_half_hours,
+            matched_periods_count=matched_in_window,
+            total_expected_periods=total_expected_periods,
             data_coverage_percentage=coverage_pct,
             last_updated_utc=self.last_run_utc,
             data_source=self.data_source,
-            notes=[
-                f"Evaluated Day-Ahead gate closure cutoff at {cutoff_hour_utc}:00 UTC (D-1).",
-                f"Selected latest eligible WINDFOR vintage where publishTime <= cutoff.",
-                f"Strictly matched on delivery period startTime with FUELHH fuelType == 'WIND'."
-            ]
+            notes=notes
         )
 
         return self.df_matched
@@ -204,14 +257,14 @@ class AnalyticsPipeline:
             missing_actual_periods=0,
             missing_forecast_periods=0,
             matched_periods_count=0,
-            total_expected_periods=1488,
+            total_expected_periods=744,
             data_coverage_percentage=0.0,
             last_updated_utc=datetime.now(timezone.utc).isoformat(),
             data_source=self.data_source,
             notes=[]
         )
 
-        # Time series preview (every period or resampled for overview)
+        # Time series preview
         ts_sample = []
         for _, row in self.df_matched.iterrows():
             ts_sample.append({
@@ -223,9 +276,11 @@ class AnalyticsPipeline:
                 "status": row["status"]
             })
 
+        window_desc = "January 2026 Day-Ahead Market (Decision Window: Jan 1 - Jan 31)" if self.current_window_type == "decision" else "January 2026 Delivery Window (Jan 1 - Jan 31)"
+
         return OverviewResponse(
             title="WindForecast Analytics",
-            analysis_window="January 2026 Day-Ahead Market",
+            analysis_window=window_desc,
             decision_cutoff_rule=f"Day D-1 at {self.selector.cutoff_hour_utc}:00 UTC",
             metrics=metrics,
             coverage_percentage=dq.data_coverage_percentage,

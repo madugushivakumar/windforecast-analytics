@@ -7,11 +7,11 @@ This document maps every requirement from the Master Project Build Prompt to its
 | **REQ-01** | National-level wind generation focus | `backend/app/services/pipeline.py` | `backend/tests/test_api.py` | **VERIFIED** |
 | **REQ-02** | Official Elexon API integration (FUELHH & WINDFOR streams) | `backend/app/services/elexon_client.py` | Live stream ingestion & test suites | **VERIFIED** |
 | **REQ-03** | Filter actual generation to `fuelType = 'WIND'` | `backend/app/services/data_cleaner.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-04** | Target delivery decisions in January 2026 | `backend/app/services/pipeline.py`, `backend/app/core/config.py` | Live January 2026 dataset execution | **VERIFIED** |
+| **REQ-04** | Target purchasing decisions executed in January 2026 (delivering Jan 2 to Feb 1) | `backend/app/services/pipeline.py`, `backend/app/core/config.py` | Verified decision-window filtering & boundary tests | **VERIFIED** |
 | **REQ-05** | Preserve and use delivery timestamp `startTime` | `backend/app/schemas/observation.py`, `data_cleaner.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
 | **REQ-06** | Preserve and use forecast publication timestamp `publishTime` | `backend/app/schemas/observation.py`, `data_cleaner.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
 | **REQ-07** | Use generation value `generation` (MW) | `backend/app/schemas/observation.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-08** | Match forecasts and actuals for identical delivery period (`startTime`) | `backend/app/services/matcher.py` | `backend/tests/test_matcher.py` | **VERIFIED** |
+| **REQ-08** | Match forecasts and actuals (hourly power arithmetic mean & half-hourly mode) | `backend/app/services/matcher.py` | `backend/tests/test_matcher.py` | **VERIFIED** |
 | **REQ-09** | Select latest eligible forecast published before decision cutoff | `backend/app/services/forecast_selector.py` | `backend/tests/test_forecast_selector.py` | **VERIFIED** |
 | **REQ-10** | Configurable day-ahead market cutoff rules | `backend/app/services/forecast_selector.py`, `backend/app/core/config.py` | `backend/tests/test_forecast_selector.py` | **VERIFIED** |
 | **REQ-11** | No fabrication of data, missing values, or future lookahead | `backend/app/services/data_cleaner.py`, `forecast_selector.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
@@ -26,7 +26,7 @@ This document maps every requirement from the Master Project Build Prompt to its
 | **REQ-20** | Page C: Accuracy Analysis & Error Distribution | `frontend/src/pages/AccuracyPage.tsx` | Vitest & Component review | **VERIFIED** |
 | **REQ-21** | Page D: Data Explorer with sorting, filtering, and real CSV Export | `frontend/src/pages/DataExplorerPage.tsx` | API test & Component review | **VERIFIED** |
 | **REQ-22** | Centralized API client and environment configuration | `frontend/src/services/api.ts` | Vitest & Component review | **VERIFIED** |
-| **REQ-23** | Automated backend unit & integration tests | `backend/tests/` | Pytest runner (24 passed) | **VERIFIED** |
+| **REQ-23** | Automated backend unit & integration tests | `backend/tests/` | Pytest runner (31 passed, 1 skipped) | **VERIFIED** |
 | **REQ-24** | Automated frontend component tests | `frontend/src/tests/` | Vitest runner (5 passed) | **VERIFIED** |
 | **REQ-25** | Dockerfile for backend & multi-stage Dockerfile for frontend | `backend/Dockerfile`, `frontend/Dockerfile` | Docker syntax & multi-stage config | **VERIFIED** |
 | **REQ-26** | Docker Compose orchestration | `docker-compose.yml` | Compose configuration | **VERIFIED** |

@@ -12,6 +12,7 @@ def compute_day_ahead_cutoff(delivery_dt: datetime, cutoff_hour_utc: int = 11) -
     For delivery on Day D:
       Decision Date = D - 1 day
       Decision Cutoff = (D - 1) at cutoff_hour_utc:00:00 UTC
+    All timestamps are normalized to timezone-aware UTC.
     """
     if delivery_dt.tzinfo is None:
         delivery_dt = delivery_dt.replace(tzinfo=timezone.utc)
@@ -26,6 +27,24 @@ def compute_day_ahead_cutoff(delivery_dt: datetime, cutoff_hour_utc: int = 11) -
         tzinfo=timezone.utc
     )
     return decision_cutoff, str(decision_date), delivery_dt
+
+
+def is_decision_in_window(
+    delivery_dt: datetime,
+    window_start: datetime,
+    window_end: datetime,
+    cutoff_hour_utc: int = 11
+) -> bool:
+    """
+    Determines if the day-ahead purchasing decision for a given delivery timestamp
+    falls strictly within [window_start, window_end).
+    """
+    cutoff_dt, _, _ = compute_day_ahead_cutoff(delivery_dt, cutoff_hour_utc)
+    if window_start.tzinfo is None:
+        window_start = window_start.replace(tzinfo=timezone.utc)
+    if window_end.tzinfo is None:
+        window_end = window_end.replace(tzinfo=timezone.utc)
+    return window_start <= cutoff_dt < window_end
 
 
 class ForecastSelector:

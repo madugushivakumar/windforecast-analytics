@@ -82,7 +82,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ data, loading, error
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Analysis Window</div>
-            <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-main)" }}>2026-01-01 to 2026-01-31</div>
+            <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-main)" }}>{data.analysis_window}</div>
           </div>
         </div>
       </div>
@@ -176,7 +176,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ data, loading, error
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
             Elexon <strong>FUELHH</strong> reports national generation at 30-minute settlement period frequency (1,488 periods in January).
             Elexon <strong>WINDFOR</strong> day-ahead national model forecasts are published at hourly resolution (744 periods).
-            Our matching engine strictly joins on normalized delivery start times without interpolating unobserved half-hours, ensuring 100% mathematical integrity.
+            Our primary evaluation aggregates the two half-hourly actual outturns per hour to calculate the exact mean hourly MW power, aligning 1-hour forecasts with 1-hour actuals with 100% mathematical integrity.
           </p>
         </div>
       </div>

@@ -112,4 +112,4 @@ docker compose down
 - [x] CORS allows production frontend origin.
 - [x] No secrets, private tokens, or `.env` files are tracked in git.
 - [x] Downloadable CSV export serves verified records with proper `Content-Disposition`.
-- [x] Public URLs tested in an incognito browser window.
+- [ ] Public URLs tested in an incognito browser window (Pending user hosting deployment & authorization).
