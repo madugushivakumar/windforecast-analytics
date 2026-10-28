@@ -1,6 +1,6 @@
 {
   "project": "WindForecast Analytics",
-  "run_timestamp_utc": "2026-10-28T08:12:52.258133+00:00",
+  "run_timestamp_utc": "2026-10-28T08:16:05.318333+00:00",
   "target_period": "January 2026",
   "window_type": "decision",
   "window_description": "Decisions Jan 1 to Jan 31 delivering Jan 2 to Feb 1",
