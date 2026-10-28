@@ -1,7 +1,7 @@
 {
   "manifest_version": "1.0",
-  "execution_timestamp_utc": "2026-10-28T07:55:07.895149+00:00",
-  "git_commit": "63706e9c3e6928bc34a8dfa77bd2938b3930af0c-dirty",
+  "execution_timestamp_utc": "2026-10-28T08:12:52.258133+00:00",
+  "git_commit": "24b4fe600fab63a6ee158ec32f9ecab27e49dc4a-dirty",
   "command": "python backend/reproduce_analysis.py --cutoff-hour 11 --cutoff-minute 0 --window decision --resolution hourly",
   "python_version": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
   "input_cache_files": [
@@ -59,7 +59,7 @@
   "output_artifacts": {
     "analysis_summary_json": {
       "file": "analysis_summary.json",
-      "sha256": "f301056400828bed126b8df9f2980f2579f2c5b2024a1ba73fa8140b18a167dd"
+      "sha256": "9f6316f6f7c4735c39cee61afdc03220f69318e20148605aa0193625cb880e68"
     },
     "observations_analysis_csv": {
       "file": "observations_analysis.csv",
@@ -67,11 +67,11 @@
     },
     "data_quality_report_json": {
       "file": "data_quality_report.json",
-      "sha256": "2b08cf0f6c7f405e4203ab800dbbd708efe31b12554d12a3a9395615492fa683"
+      "sha256": "684081f15bdabae4c06d7bdd0f9a81700cc334c79d46f9b911b6efd0b21b0cca"
     },
     "validation_log_md": {
       "file": "validation_log.md",
-      "sha256": "c04b3795100d06caf9187ad046b4929feb3c5e8d82c3bbb4dc35805301d83e05"
+      "sha256": "49b1da37c425bb289e729c18ebd44b4e714e3225b9858864e07b284b3ef8019a"
     }
   }
 }
