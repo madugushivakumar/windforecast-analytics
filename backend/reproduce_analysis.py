@@ -60,7 +60,7 @@ def get_git_commit() -> str:
         )
         commit = res.stdout.strip()
         status_res = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain", "--", ":!artifacts"],
             cwd=str(backend_dir.parent),
             capture_output=True,
             text=True,
