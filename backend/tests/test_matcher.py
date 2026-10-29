@@ -82,3 +82,102 @@ def test_matcher_hourly_aggregation():
     assert row["actual_hh0_mw"] == 10000.0
     assert row["actual_hh1_mw"] == 12000.0
     assert row["hh_count"] == 2
+
+
+def test_matcher_first_interval_missing_becomes_missing_actual():
+    """Verify that if the first half-hour (:00) is missing, the hour becomes MISSING_ACTUAL."""
+    matcher = Matcher()
+    h_start = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_2 = datetime(2026, 1, 5, 14, 30, 0, tzinfo=timezone.utc)
+
+    df_f = pd.DataFrame([{"startTime": h_start, "forecast_mw": 11500.0}])
+    # Only :30 exists
+    df_a = pd.DataFrame([{"startTime": hh_2, "actual_mw": 12000.0, "settlementDate": "2026-01-05", "settlementPeriod": 30}])
+
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+    row = df_matched.iloc[0]
+    assert row["status"] == "MISSING_ACTUAL"
+    assert pd.isna(row["actual_mw"])
+    assert counts["matched_periods"] == 0
+    assert counts["missing_actual"] == 1
+
+
+def test_matcher_second_interval_missing_becomes_missing_actual():
+    """Verify that if the second half-hour (:30) is missing, the hour becomes MISSING_ACTUAL."""
+    matcher = Matcher()
+    h_start = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_1 = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+
+    df_f = pd.DataFrame([{"startTime": h_start, "forecast_mw": 11500.0}])
+    # Only :00 exists
+    df_a = pd.DataFrame([{"startTime": hh_1, "actual_mw": 10000.0, "settlementDate": "2026-01-05", "settlementPeriod": 29}])
+
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+    row = df_matched.iloc[0]
+    assert row["status"] == "MISSING_ACTUAL"
+    assert pd.isna(row["actual_mw"])
+    assert counts["matched_periods"] == 0
+    assert counts["missing_actual"] == 1
+
+
+def test_matcher_duplicate_intervals_handled_strictly():
+    """Verify that duplicate intervals on the same startTime are deduplicated and don't count as two periods."""
+    matcher = Matcher()
+    h_start = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_1 = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+
+    df_f = pd.DataFrame([{"startTime": h_start, "forecast_mw": 11500.0}])
+    # Two records but both for :00 (duplicate timestamp)
+    df_a = pd.DataFrame([
+        {"startTime": hh_1, "actual_mw": 10000.0, "settlementDate": "2026-01-05", "settlementPeriod": 29},
+        {"startTime": hh_1, "actual_mw": 10500.0, "settlementDate": "2026-01-05", "settlementPeriod": 29},
+    ])
+
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+    row = df_matched.iloc[0]
+    # After deduplication, only 1 interval exists (:00), so the hour is incomplete
+    assert row["status"] == "MISSING_ACTUAL"
+    assert pd.isna(row["actual_mw"])
+    assert counts["matched_periods"] == 0
+
+
+def test_matcher_non_finite_interval_value_becomes_missing_actual():
+    """Verify that if an interval has NaN or infinite generation, the hour is not aggregated."""
+    import numpy as np
+    matcher = Matcher()
+    h_start = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_1 = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_2 = datetime(2026, 1, 5, 14, 30, 0, tzinfo=timezone.utc)
+
+    df_f = pd.DataFrame([{"startTime": h_start, "forecast_mw": 11500.0}])
+    df_a = pd.DataFrame([
+        {"startTime": hh_1, "actual_mw": np.nan, "settlementDate": "2026-01-05", "settlementPeriod": 29},
+        {"startTime": hh_2, "actual_mw": 12000.0, "settlementDate": "2026-01-05", "settlementPeriod": 30},
+    ])
+
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+    row = df_matched.iloc[0]
+    assert row["status"] == "MISSING_ACTUAL"
+    assert pd.isna(row["actual_mw"])
+    assert counts["matched_periods"] == 0
+
+
+def test_matcher_misaligned_timestamp_becomes_missing_actual():
+    """Verify that if an interval has a misaligned timestamp (e.g. :15 instead of :30), it is rejected."""
+    matcher = Matcher()
+    h_start = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_1 = datetime(2026, 1, 5, 14, 0, 0, tzinfo=timezone.utc)
+    hh_misaligned = datetime(2026, 1, 5, 14, 15, 0, tzinfo=timezone.utc)
+
+    df_f = pd.DataFrame([{"startTime": h_start, "forecast_mw": 11500.0}])
+    df_a = pd.DataFrame([
+        {"startTime": hh_1, "actual_mw": 10000.0, "settlementDate": "2026-01-05", "settlementPeriod": 29},
+        {"startTime": hh_misaligned, "actual_mw": 12000.0, "settlementDate": "2026-01-05", "settlementPeriod": 29},
+    ])
+
+    df_matched, counts = matcher.match(df_f, df_a, resolution="hourly")
+    row = df_matched.iloc[0]
+    assert row["status"] == "MISSING_ACTUAL"
+    assert pd.isna(row["actual_mw"])
+    assert counts["matched_periods"] == 0
+

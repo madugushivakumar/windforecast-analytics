@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <label htmlFor="cutoff-select" style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Gate Closure:
+              Decision Cutoff:
             </label>
             <select
               id="cutoff-select"
@@ -80,10 +80,10 @@ export const Header: React.FC<HeaderProps> = ({
               className="select-input"
               style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
             >
-              <option value={11}>11:00 UTC (EPEX SPOT)</option>
-              <option value={12}>12:00 UTC (GB DA 2)</option>
-              <option value={9}>09:00 UTC (Early DA)</option>
-              <option value={14}>14:00 UTC (Post-DA)</option>
+              <option value={11}>11:00 UTC (Utility Operational DA)</option>
+              <option value={12}>12:00 UTC (Midday Cutoff)</option>
+              <option value={9}>09:00 UTC (Early DA Cutoff)</option>
+              <option value={14}>14:00 UTC (Afternoon Cutoff)</option>
             </select>
           </div>
 

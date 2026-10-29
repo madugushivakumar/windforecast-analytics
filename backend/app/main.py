@@ -1,8 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import httpx
 
 from app.core.config import settings
@@ -47,6 +48,19 @@ app.add_middleware(
 )
 
 app.include_router(analytics_router)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Ensures that unhandled internal server errors return safe structured JSON with CORS headers intact,
+    logging the full exception details server-side without exposing them to clients.
+    """
+    logger.error(f"Unhandled server error on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
 
 @app.get("/", tags=["System"])

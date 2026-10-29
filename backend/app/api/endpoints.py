@@ -82,7 +82,7 @@ def get_forecasts(
         results.append({
             "startTime": r["startTime"].isoformat() if hasattr(r["startTime"], "isoformat") else str(r["startTime"]),
             "settlementDate": r.get("settlementDate"),
-            "settlementPeriod": int(r["settlementPeriod"]) if pd.notna(r.get("settlementPeriod")) else None,
+            "settlementPeriod": int(r["settlementPeriod"]) if (pd.notna(r.get("settlementPeriod")) and str(r.get("settlementPeriod")).isdigit()) else (str(r["settlementPeriod"]) if pd.notna(r.get("settlementPeriod")) else None),
             "decisionCutoff": r["decision_cutoff"].isoformat() if pd.notna(r.get("decision_cutoff")) and hasattr(r["decision_cutoff"], "isoformat") else str(r.get("decision_cutoff")),
             "selectedPublishTime": r["selected_publish_time"].isoformat() if pd.notna(r.get("selected_publish_time")) and hasattr(r["selected_publish_time"], "isoformat") else str(r.get("selected_publish_time")),
             "leadTimeHours": float(r["lead_time_hours"]) if pd.notna(r.get("lead_time_hours")) else None,

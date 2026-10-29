@@ -239,10 +239,10 @@ def run_reproducible_analysis(
         for check in val_report["checks"]:
             f.write(f"| {check['description']} | `{check['expected']}` | `{check['computed']}` | **{check['status']}** |\n")
         f.write(f"\n## Independent Metric Comparison\n\n")
-        f.write(f"| Metric | Primary Pipeline | Independent CSV Recomputation | Difference | Status |\n")
-        f.write(f"|---|---|---|---|---|\n")
+        f.write(f"| Metric | Primary Pipeline | Independent CSV Recomputation | Difference | Tolerance | Status |\n")
+        f.write(f"|---|---|---|---|---|---|\n")
         for m in val_report["metrics_comparison"]:
-            f.write(f"| {m['metric']} | {m['pipeline_val']} | {m['recomputed_val']} | {m['diff']:.4f} | **{m['status']}** |\n")
+            f.write(f"| {m['metric']} | {m['pipeline_val']} | {m['recomputed_val']} | {m['diff']:.4f} | {m.get('tolerance', 0.005):.4f} | **{m['status']}** |\n")
     print(f"Generated Validation Log: {log_path.name}")
 
     # 7. Generate Run Manifest JSON (hashes all 4 output artifacts; excludes self to prevent circularity)
@@ -375,9 +375,24 @@ def run_independent_validation(csv_path: Path, summary_data: Dict[str, Any]) -> 
         ("Conditional MAPE (%)", target_metrics["conditional_mape_percentage"], indep_mape),
     ]
 
+    # Explicit defensible tolerances based on 2-decimal rounding precision (epsilon/2 = 0.0050)
+    # Allows for continuous floating-point recomputations vs 2-decimal rounded pipeline metrics
+    metric_tolerances = {
+        "MAE (MW)": 0.0050,
+        "RMSE (MW)": 0.0050,
+        "Mean Signed Error / Bias (MW)": 0.0050,
+        "Max Absolute Error (MW)": 0.0001,
+        "Min Signed Error (MW)": 0.0001,
+        "Max Signed Error (MW)": 0.0001,
+        "Error Std Dev (MW)": 0.0050,
+        "WAPE (%)": 0.0050,
+        "Conditional MAPE (%)": 0.0050,
+    }
+
     for label, pipe_val, indep_val in metrics_to_check:
         diff = abs(pipe_val - indep_val)
-        chk_pass = diff < 0.05
+        tol = metric_tolerances.get(label, 0.0050)
+        chk_pass = diff <= tol
         if not chk_pass:
             all_passed = False
         metrics_comp.append({
@@ -385,6 +400,7 @@ def run_independent_validation(csv_path: Path, summary_data: Dict[str, Any]) -> 
             "pipeline_val": round(pipe_val, 2),
             "recomputed_val": round(indep_val, 2),
             "diff": diff,
+            "tolerance": tol,
             "status": "PASS" if chk_pass else "FAIL"
         })
 

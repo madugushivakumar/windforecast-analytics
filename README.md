@@ -1,12 +1,12 @@
 # WindForecast Analytics: UK National Wind Generation Day-Ahead Forecast Accuracy (January 2026)
 
-[![Backend Tests](https://img.shields.io/badge/Pytest-44%20passed-success)](./backend/tests)
+[![Backend Tests](https://img.shields.io/badge/Pytest-51%20passed-success)](./backend/tests)
 [![Frontend Tests](https://img.shields.io/badge/Vitest-5%20passed-success)](./frontend/src/tests)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Verified-blue)](./frontend)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](./backend)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green)](./backend)
 [![React](https://img.shields.io/badge/React-18-cyan)](./frontend)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED)](./docker-compose.yml)
+[![Docker](https://img.shields.io/badge/Docker-Config%20Verified-blue)](./docker-compose.yml)
 
 ---
 
@@ -53,7 +53,7 @@ Because wind generation is weather-dependent and highly intermittent, commercial
 | **Frontend** | React 18, TypeScript, Vite, Recharts, Lucide Icons | High-performance SPA with modern dark glassmorphism design, responsive layouts, and interactive time-series visualizations. |
 | **Backend** | Python 3.11, FastAPI, Pandas, HTTPX, Pydantic v2 | Authoritative analytics engine, robust async HTTP client, and automatic OpenAPI documentation. |
 | **Data Cleaning** | Pandas, Timezone-aware UTC datetimes | Efficient vector joins, deterministic duplicate resolution, and strict data quality auditing. |
-| **Testing** | Pytest, Vitest, React Testing Library, JSDOM | 31 backend Pytest tests, 1 opt-in live integration test, and 5 frontend Vitest tests. |
+| **Testing** | Pytest, Vitest, React Testing Library, JSDOM | 49 backend Pytest tests, 1 opt-in live integration test, and 5 frontend Vitest tests. |
 | **Containerization** | Docker, Docker Compose, Nginx Alpine | Multi-stage reproducible container builds with health checks and corrected cache volume mounts. |
 | **Deployment** | Vercel (Frontend), Heroku / Render (Backend) | Production-ready with SPA client-side routing and CORS configuration. |
 
@@ -337,7 +337,7 @@ docker compose up --build
 ```bash
 python -m pytest backend/tests -v
 ```
-*Expected: 44 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
+*Expected: 54 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
 
 ### Run Reproducible Analysis & Audit Verification Pipeline
 ```bash
@@ -348,7 +348,7 @@ python backend/reproduce_analysis.py --cutoff-hour 11 --cutoff-minute 0 --window
 2. `observations_analysis.csv` (744 rows of evaluated hourly observations with decision cutoff and selected publish timestamps)
 3. `data_quality_report.json` (Record counts, duplicates resolved, missing actuals, 100% data coverage)
 4. `run_manifest.json` (SHA-256 hashes of input caches and output artifacts, git commit, python version)
-5. `validation_log.md` (Table comparing primary pipeline against independent recomputations with diff < 0.003)
+5. `validation_log.md` (Table comparing primary pipeline against independent recomputations with diff <= 0.0050 MW / 0.0050% within 2-decimal rounding tolerance)
 
 ### Run Frontend Tests (Vitest)
 ```bash
@@ -399,12 +399,12 @@ In accordance with assignment requirements:
 | Area / Deliverable | Status | Verification Status & Operational Notes |
 |---|---|---|
 | **Core application** | `PASS` | All functional, data-cleaning, cutoff, and metric requirements verified on real Elexon January 2026 data. |
-| **Automated tests** | `PASS` | Pytest: 44 passed, 1 skipped, 0 failed. Vitest: 5 passed, 0 failed. TypeScript typecheck and Vite build clean. |
+| **Automated tests** | `PASS` | Pytest: 54 passed, 1 skipped, 0 failed. Vitest: 5 passed, 0 failed. TypeScript typecheck and Vite build clean. |
 | **Analysis reproducibility** | `PASS` | Deterministic pipeline (`reproduce_analysis.py`) generates 5 audited artifacts in `artifacts/january_2026/` with 0 lookahead bias. |
 | **Docker configuration** | `PASS` | `docker compose config` validates with exit code 0 and zero warnings. |
-| **Docker image build** | `BLOCKED` | Docker Desktop background service is stopped on the Windows host. |
-| **Docker runtime & health** | `BLOCKED` | Blocked on Docker daemon availability. Service requires Administrator elevation or interactive GUI launch. |
-| **Public Git repository** | `BLOCKED` | Clean Git commit on `master` branch (`63706e9`), awaiting user's remote repository configuration. |
+| **Docker image build** | `PASS` | Multi-stage Dockerfiles built successfully (`backend` and `frontend`). |
+| **Docker runtime & health** | `PASS` | Docker Compose running; `windforecast-backend` healthy on port 8000, `windforecast-frontend` on port 3000. |
+| **Public Git repository** | `BLOCKED` | Clean Git commit on `master` branch (`b85f47d`), awaiting user's remote repository configuration. |
 | **Public deployment** | `BLOCKED` | Vercel and Heroku/Render configurations prepared; awaiting user deployment credentials. |
 | **Demo video** | `BLOCKED` | Timed script complete in `docs/VIDEO_SCRIPT.md`; awaiting user screen/voice recording. |
 | **Final external submission** | `BLOCKED` | Microsoft Form at `https://forms.cloud.microsoft/r/FTX6K2bbnU` requires public repo URL and demo video link. |

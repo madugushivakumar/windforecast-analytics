@@ -1,6 +1,6 @@
 {
   "project": "WindForecast Analytics",
-  "run_timestamp_utc": "2026-10-28T08:16:05.318333+00:00",
+  "run_timestamp_utc": "2026-10-29T09:03:57.013201+00:00",
   "target_period": "January 2026",
   "window_type": "decision",
   "window_description": "Decisions Jan 1 to Jan 31 delivering Jan 2 to Feb 1",
@@ -87,6 +87,7 @@
         "pipeline_val": 2013.01,
         "recomputed_val": 2013.01,
         "diff": 0.0019354838709659816,
+        "tolerance": 0.005,
         "status": "PASS"
       },
       {
@@ -94,6 +95,7 @@
         "pipeline_val": 2505.94,
         "recomputed_val": 2505.94,
         "diff": 0.0031493703809246654,
+        "tolerance": 0.005,
         "status": "PASS"
       },
       {
@@ -101,6 +103,7 @@
         "pipeline_val": 1729.93,
         "recomputed_val": 1729.93,
         "diff": 0.0014516129031107994,
+        "tolerance": 0.005,
         "status": "PASS"
       },
       {
@@ -108,6 +111,7 @@
         "pipeline_val": 6833.0,
         "recomputed_val": 6833.0,
         "diff": 0.0,
+        "tolerance": 0.0001,
         "status": "PASS"
       },
       {
@@ -115,6 +119,7 @@
         "pipeline_val": -4128.0,
         "recomputed_val": -4128.0,
         "diff": 0.0,
+        "tolerance": 0.0001,
         "status": "PASS"
       },
       {
@@ -122,6 +127,7 @@
         "pipeline_val": 6833.0,
         "recomputed_val": 6833.0,
         "diff": 0.0,
+        "tolerance": 0.0001,
         "status": "PASS"
       },
       {
@@ -129,6 +135,7 @@
         "pipeline_val": 1814.25,
         "recomputed_val": 1814.25,
         "diff": 0.0025503057056539546,
+        "tolerance": 0.005,
         "status": "PASS"
       },
       {
@@ -136,6 +143,7 @@
         "pipeline_val": 17.84,
         "recomputed_val": 17.84,
         "diff": 0.00018924672366082973,
+        "tolerance": 0.005,
         "status": "PASS"
       },
       {
@@ -143,6 +151,7 @@
         "pipeline_val": 21.61,
         "recomputed_val": 21.61,
         "diff": 0.00015681846637960462,
+        "tolerance": 0.005,
         "status": "PASS"
       }
     ]

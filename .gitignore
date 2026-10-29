@@ -69,6 +69,6 @@ Thumbs.db
 .env.production.local
 
 # Cache data
-data/
-data/cache/
+# Cache data
+# data/cache/*.json tracked for offline reproduction
 *.json.cache

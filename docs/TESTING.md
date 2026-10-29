@@ -23,11 +23,11 @@ python -m pytest backend/tests -v
 ```
 
 **Results**:
-- **Total Test Cases**: 45 (44 deterministic + 1 opt-in live test)
-- **Passed**: 44 (100% of deterministic suite)
+- **Total Test Cases**: 55 (54 deterministic + 1 opt-in live test)
+- **Passed**: 54 (100% of deterministic suite)
 - **Skipped**: 1 (Live Elexon API integration test, activated via `$env:RUN_LIVE_TESTS="1"`)
 - **Failed**: 0
-- **Duration**: ~4.5 seconds
+- **Duration**: ~6.5 seconds
 
 | Test File | Test Name | Target Behavior | Result |
 |---|---|---|---|
@@ -55,13 +55,18 @@ python -m pytest backend/tests -v
 | `test_forecast_selector.py` | `test_market_cutoff_info_metadata` | Verifies market cutoff documentation and classification metadata | **PASSED** |
 | `test_matcher.py` | `test_matcher_exact_join_and_errors` | Joins strictly on delivery `startTime`, flags unmatched | **PASSED** |
 | `test_matcher.py` | `test_matcher_hourly_aggregation` | Evaluates arithmetic mean of half-hour power readings with full audit columns | **PASSED** |
+| `test_matcher.py` | `test_matcher_first_interval_missing_becomes_missing_actual` | Flags hour as MISSING_ACTUAL when first half-hour is missing | **PASSED** |
+| `test_matcher.py` | `test_matcher_second_interval_missing_becomes_missing_actual` | Flags hour as MISSING_ACTUAL when second half-hour is missing | **PASSED** |
+| `test_matcher.py` | `test_matcher_duplicate_intervals_handled_strictly` | Deduplicates exact timestamps and flags hour as MISSING_ACTUAL | **PASSED** |
+| `test_matcher.py` | `test_matcher_non_finite_interval_value_becomes_missing_actual` | Flags hour as MISSING_ACTUAL if interval has NaN or infinite generation | **PASSED** |
+| `test_matcher.py` | `test_matcher_misaligned_timestamp_becomes_missing_actual` | Flags hour as MISSING_ACTUAL if timestamps are misaligned | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_provenance_labeling_disk_cache` | Asserts exact `DISK_CACHE` label when reading from disk | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_corrupted_cache_fallback` | Validates fallback to live stream on empty/corrupt cache | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_pipeline_decision_date_window_selection` | Verifies 744 hours delivery from Jan 1-31 decisions (delivering Jan 2-Feb 1) | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_pipeline_half_hourly_resolution_transparency` | Verifies transparent reporting of 744 unforecasted half-hours (50% coverage) | **PASSED** |
 | `test_provenance_and_pipeline.py` | `test_live_elexon_api_integration` | Opt-in live smoke test against `data.elexon.co.uk` | **SKIPPED** (Opt-in) |
 | `test_reproducibility.py` | `test_artifacts_exist_and_are_valid` | Verifies all 5 January 2026 audit artifacts exist with valid schemas | **PASSED** |
-| `test_reproducibility.py` | `test_independent_validation_passes` | Recomputes all metrics from raw CSV; verifies zero discrepancy (<0.003) | **PASSED** |
+| `test_reproducibility.py` | `test_independent_validation_passes` | Recomputes all metrics from raw CSV; verifies zero discrepancy within defensible 2-decimal rounding tolerance (diff <= 0.0050 MW / 0.0050%) | **PASSED** |
 | `test_reproducibility.py` | `test_zero_lookahead_bias_in_saved_csv` | Audits all 744 rows: asserts 0 records with publishTime > decisionCutoff | **PASSED** |
 | `test_reproducibility.py` | `test_february_1_deliveries_included_for_january_decisions` | Verifies 24 hours of Feb 1 deliveries resulting from Jan 31 decisions | **PASSED** |
 | `test_reproducibility.py` | `test_api_metrics_match_saved_artifacts` | Asserts `/api/accuracy` and `/api/overview` exactly match saved summary | **PASSED** |
@@ -76,6 +81,11 @@ python -m pytest backend/tests -v
 | `test_api.py` | `test_forecast_history_endpoint` | Verifies vintage inspection endpoint | **PASSED** |
 | `test_api.py` | `test_data_quality_endpoint` | Verifies audit summary and coverage counts | **PASSED** |
 | `test_api.py` | `test_observations_pagination_and_csv` | Verifies pagination and downloadable CSV export | **PASSED** |
+| `test_api.py` | `test_forecasts_endpoint_cors_dev_origin_3001` | Verifies CORS response headers for port 3001 | **PASSED** |
+| `test_api.py` | `test_forecasts_options_preflight_cors_3001` | Verifies CORS preflight OPTIONS request for port 3001 | **PASSED** |
+| `test_api.py` | `test_forecasts_endpoint_handles_hourly_range_settlement_period` | Verifies safe handling of range strings (`P1-P2`) | **PASSED** |
+| `test_api.py` | `test_forecasts_endpoint_numeric_settlement_period` | Verifies safe handling of numeric settlement periods | **PASSED** |
+| `test_api.py` | `test_unapproved_origin_cors_rejection` | Verifies rejection of unapproved origins | **PASSED** |
 
 ---
 

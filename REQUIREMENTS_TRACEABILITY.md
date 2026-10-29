@@ -1,36 +1,54 @@
 # Requirements Traceability Matrix: WindForecast Analytics
 
-This document maps every requirement from the Master Project Build Prompt to its implementation files, automated test cases, and deliverables.
+This matrix tracks every explicit requirement from the assignment specification (**REint Full Stack SWE challenge v4.1 Shared - intern(1).docx**), mapping each requirement to its source, implementation files, verification methods, empirical test evidence, deliverable status, and remaining actions.
 
-| Req ID | Requirement Description | Implementation Component / File | Verification & Test File | Deliverable Status |
-|---|---|---|---|---|
-| **REQ-01** | National-level wind generation focus | `backend/app/services/pipeline.py` | `backend/tests/test_api.py` | **VERIFIED** |
-| **REQ-02** | Official Elexon API integration (FUELHH & WINDFOR streams) | `backend/app/services/elexon_client.py` | Live stream ingestion & test suites | **VERIFIED** |
-| **REQ-03** | Filter actual generation to `fuelType = 'WIND'` | `backend/app/services/data_cleaner.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-04** | Target purchasing decisions executed in January 2026 (delivering Jan 2 to Feb 1) | `backend/app/services/pipeline.py`, `backend/app/core/config.py` | Verified decision-window filtering & boundary tests | **VERIFIED** |
-| **REQ-05** | Preserve and use delivery timestamp `startTime` | `backend/app/schemas/observation.py`, `data_cleaner.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-06** | Preserve and use forecast publication timestamp `publishTime` | `backend/app/schemas/observation.py`, `data_cleaner.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-07** | Use generation value `generation` (MW) | `backend/app/schemas/observation.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-08** | Match forecasts and actuals (hourly power arithmetic mean & half-hourly mode) | `backend/app/services/matcher.py` | `backend/tests/test_matcher.py` | **VERIFIED** |
-| **REQ-09** | Select latest eligible forecast published before decision cutoff | `backend/app/services/forecast_selector.py` | `backend/tests/test_forecast_selector.py` | **VERIFIED** |
-| **REQ-10** | Configurable day-ahead market cutoff rules | `backend/app/services/forecast_selector.py`, `backend/app/core/config.py` | `backend/tests/test_forecast_selector.py` | **VERIFIED** |
-| **REQ-11** | No fabrication of data, missing values, or future lookahead | `backend/app/services/data_cleaner.py`, `forecast_selector.py` | `backend/tests/test_data_cleaner.py` | **VERIFIED** |
-| **REQ-12** | Pure mathematical forecast accuracy functions (MAE, RMSE, Signed Error, Bias) | `backend/app/analytics/metrics.py` | `backend/tests/test_metrics.py` | **VERIFIED** |
-| **REQ-13** | Safe zero-actual handling without misleading MAPE infinities | `backend/app/analytics/metrics.py` | `backend/tests/test_metrics.py` | **VERIFIED** |
-| **REQ-14** | Data Quality summaries (counts, invalid records, missing periods, duplicates) | `backend/app/services/data_cleaner.py`, `app/api/endpoints.py` | `backend/tests/test_api.py` | **VERIFIED** |
-| **REQ-15** | FastAPI backend with documented REST endpoints | `backend/app/main.py`, `backend/app/api/endpoints.py` | `backend/tests/test_api.py` | **VERIFIED** |
-| **REQ-16** | Interactive Swagger / OpenAPI docs & Health check endpoints | `backend/app/main.py` | `backend/tests/test_api.py` | **VERIFIED** |
-| **REQ-17** | React frontend with modern responsive enterprise design | `frontend/src/App.tsx`, `frontend/src/index.css` | `npm run build` & Vitest | **VERIFIED** |
-| **REQ-18** | Page A: Overview Dashboard with KPIs & Time-Series Chart | `frontend/src/pages/OverviewPage.tsx` | `frontend/src/tests/OverviewPage.test.tsx` | **VERIFIED** |
-| **REQ-19** | Page B: Forecast Comparison & Vintage Analysis | `frontend/src/pages/ForecastComparisonPage.tsx` | Vitest & Component review | **VERIFIED** |
-| **REQ-20** | Page C: Accuracy Analysis & Error Distribution | `frontend/src/pages/AccuracyPage.tsx` | Vitest & Component review | **VERIFIED** |
-| **REQ-21** | Page D: Data Explorer with sorting, filtering, and real CSV Export | `frontend/src/pages/DataExplorerPage.tsx` | API test & Component review | **VERIFIED** |
-| **REQ-22** | Centralized API client and environment configuration | `frontend/src/services/api.ts` | Vitest & Component review | **VERIFIED** |
-| **REQ-23** | Automated backend unit & integration tests | `backend/tests/` | Pytest runner (44 passed, 1 skipped) | **VERIFIED** |
-| **REQ-24** | Automated frontend component tests | `frontend/src/tests/` | Vitest runner (5 passed) | **VERIFIED** |
-| **REQ-25** | Dockerfile for backend & multi-stage Dockerfile for frontend | `backend/Dockerfile`, `frontend/Dockerfile` | Docker syntax & multi-stage config | **VERIFIED** |
-| **REQ-26** | Docker Compose orchestration | `docker-compose.yml` | Compose configuration | **VERIFIED** |
-| **REQ-27** | Production deployment instructions (Vercel + Python host / Heroku) | `docs/DEPLOYMENT.md` | Deployment guide | **VERIFIED** |
-| **REQ-28** | Complete project documentation | `docs/ARCHITECTURE.md`, `DATA_DICTIONARY.md`, `DATA_ASSUMPTIONS.md`, `TESTING.md`, `README.md` | Complete & reviewed | **VERIFIED** |
-| **REQ-29** | Complete 10-minute Video Demo Script (Customer + Technical) | `docs/VIDEO_SCRIPT.md` | Complete timed script | **VERIFIED** |
-| **REQ-30** | Final submission checklist & anonymous repo preparation | `docs/SUBMISSION_CHECKLIST.md` | Complete checklist | **VERIFIED** |
+## Status Taxonomy
+- `COMPLETE AND VERIFIED`: Implemented and verified locally with actual automated tests and command evidence.
+- `IMPLEMENTED BUT NOT VERIFIED`: Implementation exists but could not be independently executed or verified.
+- `PARTIALLY COMPLETE`: Portions implemented, with functional gaps remaining.
+- `NOT IMPLEMENTED`: Not yet authored or integrated.
+- `BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS`: Ready locally, but execution or deployment is blocked by external credentials, missing host daemon, or user authorization.
+- `NOT APPLICABLE`: Explicitly outside the scope of the assignment.
+
+---
+
+## Traceability Table
+
+| Req ID | Requirement Description | Assignment Source | Implementation Location | Verification Method | Actual Empirical Evidence | Deliverable Status | Remaining Work |
+|---|---|---|---|---|---|---|---|
+| **REQ-01** | National-level wind generation focus (no data beyond Elexon) | Section 1, Section 2 | `backend/app/services/pipeline.py`, `backend/app/services/elexon_client.py` | Code inspection & API responses | Only Elexon BMRS endpoints accessed (`FUELHH` and `WINDFOR`); no external weather or generation feeds used. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-02** | Actual wind generation ingestion from `FUELHH/stream` | Section 2.1 | `backend/app/services/elexon_client.py` | Live & cached stream parsing | Retained 10 disk cache files (6,740 records/week for FUELHH; 4,088 records/week for WINDFOR); verified in `test_provenance_and_pipeline.py`. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-03** | Filter actual generation to `fuelType == "WIND"` | Section 2.1 | `backend/app/services/data_cleaner.py` (`clean_fuelhh_actuals`) | Pytest: `test_clean_fuelhh_actuals_filters_to_wind` | Non-wind fuel types (CCGT, NUCLEAR, BIOMASS, etc.) strictly discarded. 100% of analyzed actuals are wind generation. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-04** | Use delivery timestamp `startTime` (30-min resolution) | Section 2.1 | `backend/app/schemas/observation.py`, `backend/app/services/data_cleaner.py` | Pytest: `test_parse_utc_timestamp` | Strict ISO 8601 UTC parsing; half-hourly periods indexed across settlement periods 1–48. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-05** | Actual generation output power `generation` (MW) | Section 2.1 | `backend/app/schemas/observation.py`, `backend/app/services/data_cleaner.py` | Pytest: `test_clean_fuelhh_actuals_discards_negative_and_invalid` | Non-negative, finite float validation; negative generation rejected and audited. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-06** | Forecasted generation ingestion from `WINDFOR/stream` | Section 2.2 | `backend/app/services/elexon_client.py`, `data_cleaner.py` | Pytest: `test_forecast_selector.py` | Hourly forecast records ingested with delivery `startTime` and publication `publishTime`. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-07** | Preserve and evaluate forecast publication timestamp `publishTime` | Section 2.2 | `backend/app/schemas/observation.py`, `backend/app/services/forecast_selector.py` | Pytest: `test_forecast_history_vintages_auditing` | All forecast publication vintages retained and sorted by `publishTime` ascending. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-08** | Purchasing decisions relevant to January 2026 | Section 2 | `backend/app/services/pipeline.py`, `backend/app/services/forecast_selector.py` | Pytest: `test_pipeline_decision_date_window_selection`, `test_february_1_deliveries_included_for_january_decisions` | Evaluates Day-Ahead decisions executed Jan 1–31, 2026, delivering power from Jan 2 00:00 UTC through Feb 1 23:00 UTC (exactly 744 hours). | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-09** | Latest renewable forecast available at decision cutoff | Section 1, Section 2.2 | `backend/app/services/forecast_selector.py` | Pytest: `test_forecast_selector_excludes_post_cutoff_forecasts`, `test_gate_closure_second_level_precision_and_lookahead_bias` | Filters to `publishTime <= cutoffTime`; selects latest eligible publication vintage. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-10** | Zero lookahead bias enforcement | Section 1, Section 2.2 | `backend/app/services/forecast_selector.py`, `backend/reproduce_analysis.py` | Independent audit across all 744 output rows in `observations_analysis.csv` | Exactly 0 records have `publishTime > decisionCutoff` (computed lookahead violations: 0). | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-11** | Resolution alignment (hourly forecast vs half-hourly actuals) | Section 1, Section 2.1, Section 2.2 | `backend/app/services/matcher.py` | Pytest: `test_matcher_hourly_aggregation`, `test_matcher_first_interval_missing_becomes_missing_actual`, `test_matcher_second_interval_missing_becomes_missing_actual` | Arithmetic mean of 2 half-hourly actuals: $A_H = (A_{00} + A_{30})/2$ MW. Incomplete or misaligned hours marked `MISSING_ACTUAL`. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-12** | Quantitative forecast accuracy evaluation (MAE, RMSE, Bias) | Section 1 | `backend/app/analytics/metrics.py`, `backend/app/services/pipeline.py` | Pytest: `test_metrics.py`, `backend/reproduce_analysis.py` | Recalculated on $N=744$ hours: MAE = 2,013.01 MW, RMSE = 2,505.94 MW, Mean Signed Error (Bias) = +1,729.93 MW. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-13** | Additional accuracy metrics (Max/Min error, Std Dev, WAPE, Conditional MAPE) | Section 1 | `backend/app/analytics/metrics.py` | Pytest: `test_hand_calculated_metrics`, `test_zero_actuals_mape_handling` | Max Abs Error = 6,833.0 MW, Min Error = -4,128.0 MW, Max Error = 6,833.0 MW, Sample Std Dev ($N-1$) = 1,814.25 MW, WAPE = 17.84%, Conditional MAPE = 21.61% ($744/744$ periods $\ge 100$ MW). | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-14** | Python backend | Section 2 | `backend/app/main.py`, `backend/app/api/endpoints.py` | Pytest runner: `python -m pytest backend/tests -v` | 51 passed, 1 skipped (live test opt-in), 0 failed, 1 upstream warning, 0 application warnings. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-15** | React frontend | Section 2 | `frontend/src/App.tsx`, `frontend/src/pages/` | Vitest runner: `npm run test`; Vite production build: `npm run build` | 5 passed in 3 test files; TypeScript clean; production bundle in `frontend/dist`. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-16** | AI tools explicit disclosure in README | Section 2 | `README.md` (Section 11) | Text inspection | Explicitly documents use of Antigravity AI assistant for architecture, tests, and documentation. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-17** | Docker Compose & Container configuration | Section 2 | `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml` | `docker compose config` | Compose specification validated with exit code 0 and zero syntax errors. Non-root `appuser` (UID 1000) configured in backend Dockerfile. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-18** | Docker container build & runtime verification | Section 2 | `docker-compose.yml`, Docker engine | `docker info`, `docker compose up --build` | Docker CLI 29.1.3 installed; Docker Desktop daemon was stopped on host (`open //./pipe/dockerDesktopLinuxEngine` failed). | **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS** | Requires starting Docker Desktop background service on Windows host. |
+| **REQ-19** | Deployment to Vercel (Frontend) | Section 2, Section 3.2 | `frontend/vercel.json`, `docs/DEPLOYMENT.md` | Build output check | Static production bundle ready in `frontend/dist`; SPA routing configured in `vercel.json`. | **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS** | Requires user Vercel account login and authorization to deploy. |
+| **REQ-20** | Deployment to Heroku / Render (Backend) | Section 2, Section 3.2 | `backend/Procfile`, `backend/Dockerfile`, `docs/DEPLOYMENT.md` | File inspection | `Procfile` and non-root Dockerfile configured; port dynamic binding supported. | **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS** | Requires user Heroku / Render account login and authorization to deploy. |
+| **REQ-21** | Deliverable 3.1: Video Demo Script & Storyboard | Section 3.1 | `docs/VIDEO_SCRIPT.md` | Script timing & technical review | Complete script with 2 distinct sections: Part 1 Customer (4m 45s, max 5m), Part 2 Tech Lead (4m 45s, max 5m), total 9m 30s (max 10m). | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-22** | Deliverable 3.1: Video Recording & YouTube Upload | Section 3.1 | YouTube platform | Unlisted URL verification | Screen recording with voiceover must be recorded by user and uploaded to YouTube as Unlisted. | **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS** | User screen recording and unlisted YouTube upload. |
+| **REQ-23** | Deliverable 3.2: Git repository structure, README, .gitignore | Section 3.2 | `README.md`, `.gitignore`, `backend/`, `frontend/`, `docs/` | Git inspection & file audit | Master branch history preserved; no secrets tracked; clear directory structure and local startup instructions provided. | **COMPLETE AND VERIFIED** | None (locally verified). |
+| **REQ-24** | Deliverable 3.2: Public GitHub repository creation | Section 3.2 | GitHub platform | Remote URL verification | User has not yet authorized or created the public anonymous GitHub repository. | **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS** | User creates anonymous GitHub repo (e.g. `https://github.com/<user>/<anonymous-name>`) and authorizes push. |
+| **REQ-25** | Deliverable 3.3: Microsoft Form submission | Section 3.3 | Microsoft Form (`https://forms.cloud.microsoft/r/FTX6K2bbnU`) | Incognito URL access test | Pre-submission checklist and verification criteria prepared in `docs/SUBMISSION_CHECKLIST.md`. Form not submitted. | **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS** | Awaiting user creation of public repo, deployment URL, and video link. |
+
+---
+
+## Summary of Implementation Readiness
+- **Total Requirements Tracked**: 25
+- **COMPLETE AND VERIFIED (Locally)**: 19
+- **BLOCKED BY ENVIRONMENT OR EXTERNAL ACCESS**: 6 (Docker Daemon Runtime, Vercel Frontend Deploy, Heroku/Render Backend Deploy, YouTube Video Upload, Public GitHub Repo Push, Microsoft Form Submission)
+- **IMPLEMENTED BUT NOT VERIFIED**: 0
+- **PARTIALLY COMPLETE**: 0
+- **NOT IMPLEMENTED**: 0
+- **NOT APPLICABLE**: 0

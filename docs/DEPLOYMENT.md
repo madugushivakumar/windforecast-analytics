@@ -88,8 +88,8 @@ This guide details how to deploy the WindForecast Analytics platform to producti
 ## 4. Local Container Deployment (Docker Compose)
 
 The repository provides production-ready container configurations for both services:
-- `backend/Dockerfile`: Multi-layer Python 3.11-slim container with non-root app structure and cache mount.
-- `frontend/Dockerfile`: Multi-stage build (Node 20 build stage -> Nginx 1.25 Alpine runtime stage with custom reverse proxy).
+- `backend/Dockerfile`: Multi-layer Python 3.11-slim container with dedicated non-root `appuser` (UID 1000) adhering to least-privilege principles and volume cache mount.
+- `frontend/Dockerfile`: Multi-stage build (Node 20 build stage -> Nginx Alpine static SPA web server with client-side SPA routing and direct browser-to-backend CORS communication).
 - `docker-compose.yml`: Coordinates services, environment variables, healthchecks, and host volume caching (`./backend/data/cache:/app/data/cache`).
 
 ### Configuration Validation

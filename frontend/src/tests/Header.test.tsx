@@ -32,5 +32,10 @@ describe("Header Component", () => {
     const comparisonTab = screen.getByRole("button", { name: /Forecast Comparison/i });
     fireEvent.click(comparisonTab);
     expect(setActiveTab).toHaveBeenCalledWith("comparison");
+
+    const cutoffSelect = screen.getByLabelText(/Decision Cutoff:/i);
+    expect(cutoffSelect).toBeInTheDocument();
+    fireEvent.change(cutoffSelect, { target: { value: "12" } });
+    expect(setCutoffHour).toHaveBeenCalledWith(12);
   });
 });

@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root system user and group for principle of least privilege
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -s /bin/bash -m appuser
+
 # Install python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -14,8 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend application code
 COPY . .
 
-# Create cache directory
-RUN mkdir -p data/cache
+# Create cache directory and grant ownership to non-root user
+RUN mkdir -p data/cache && \
+    chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 

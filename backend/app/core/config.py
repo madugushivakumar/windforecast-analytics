@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import List
+from typing import List, Union, Any
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,14 +32,54 @@ class Settings(BaseSettings):
     CACHE_DIR: Path = BASE_DIR / "data" / "cache"
     ENABLE_CACHE: bool = True
     
-    # CORS
-    CORS_ORIGINS: List[str] = [
+    # CORS - Explicit allowed origins (wildcard * disallowed when credentials enabled)
+    CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
-        "http://localhost:5173",
+        "http://localhost:3001",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "*"
+        "https://windforecast-analytics.vercel.app"
     ]
+
+    @field_validator("CORS_ORIGINS", mode="after")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> List[str]:
+        required_dev_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ]
+        origins: List[str] = []
+        if isinstance(v, str):
+            import json
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    origins = [str(o).strip() for o in parsed if str(o).strip() and str(o).strip() != "*"]
+            except Exception:
+                pass
+            if not origins:
+                origins = [origin.strip() for origin in v.split(",") if origin.strip() and origin.strip() != "*"]
+        elif isinstance(v, list):
+            origins = [str(o).strip() for o in v if str(o).strip() and str(o).strip() != "*"]
+        else:
+            origins = [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://windforecast-analytics.vercel.app"
+            ]
+
+        for o in required_dev_origins:
+            if o not in origins:
+                origins.append(o)
+        return origins
 
     model_config = SettingsConfigDict(env_file=".env", extra="allow")
 

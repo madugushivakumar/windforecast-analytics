@@ -7,7 +7,7 @@ The primary objective of **WindForecast Analytics** is to provide an authoritati
 1. Ingests official Elexon Insights Solution datasets:
    - `FUELHH` (Half-hourly generation outturn by fuel type, filtered strictly to `fuelType = 'WIND'`)
    - `WINDFOR` (Day-ahead wind generation forecasts published at varying vintages)
-2. Implements a transparent, deterministic Day-Ahead decision cutoff rule for January 2026 purchasing decisions (e.g., standard UK Day-Ahead auction gate closure at 11:00 / 12:00 UTC day-ahead, with configurable decision cutoffs).
+2. Implements a transparent, deterministic Day-Ahead decision cutoff rule for January 2026 purchasing decisions (e.g., utility operational decision baseline at 11:00 UTC on day D-1, with full configurability to specific exchange deadlines such as EPEX SPOT 09:20 UTC).
 3. Matches delivery periods (`startTime`) with the latest eligible forecast published prior to the decision cutoff (`publishTime <= cutoffTime`).
 4. Computes quantitative forecast accuracy metrics (Mean Absolute Error [MAE], Root Mean Squared Error [RMSE], Mean Signed Error / Bias [MSE], maximum error, error distributions).
 5. Provides a clean, modern, responsive enterprise React dashboard with interactive time-series visualizations, forecast vintage comparisons, accuracy distributions, and filtered record explorer with export capabilities.

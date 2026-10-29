@@ -40,8 +40,8 @@
 - **Spoken Script**:
   > "Let's switch to the Forecast Comparison view. Here, trading analysts can drill down into specific delivery windows—such as high-wind storm fronts or low-generation lulls.
   > Let's look at Week 2 in January. Notice how the forecast captured the rising ramp, but significantly overestimated peak generation.
-  > When I click on this delivery period on January 10th, the system opens the **Forecast Vintage History Inspector**. National Grid ESO publishes multiple forecast runs for each delivery period. Our engine strictly enforces the **Day-Ahead gate closure cutoff at 11:00 UTC on day D minus 1**.
-  > In this audit table, you can see all historical runs. Runs published after 11:00 AM are tagged as post-cutoff future information and excluded. The system automatically selected the latest eligible publication—giving our traders complete confidence that no lookahead bias influenced the analysis."
+  > When I click on this delivery period on January 10th, the system opens the **Forecast Vintage History Inspector**. National Grid ESO publishes multiple forecast runs for each delivery period. Our engine enforces the **Day-Ahead decision cutoff at 11:00 UTC on day D minus 1 as our utility operational baseline** (also configurable to specific power exchange deadlines like EPEX SPOT GB at 09:20 UTC).
+  > In this audit table, you can see all historical runs. Runs published after the 11:00 AM operational decision cutoff are tagged as post-cutoff future information and excluded. The system automatically selected the latest eligible publication—giving our traders complete confidence that no lookahead bias influenced the analysis."
 
 ### 2:15–3:15 — Accuracy Analysis & Error Distribution
 - **Screen**: Navigate to **Accuracy Metrics** tab. Highlight Error Distribution histogram and the Top 10 Discrepancy Table.
@@ -71,7 +71,7 @@
 **Target Duration**: 4 minutes 45 seconds (Max: 5:00)  
 **Presenter**: Senior Full-Stack / Data Engineer
 
-### 0:00–0:45 — Full-Stack Architecture Overview
+### 4:45–5:30 (Part 2: 0:00–0:45) — Full-Stack Architecture Overview
 - **Screen**: Show `docs/ARCHITECTURE.md` mermaid diagram or code structure in IDE.
 - **Spoken Script**:
   > "Welcome to the technical walkthrough. WindForecast Analytics is built on a modern, decoupled full-stack architecture:
@@ -79,7 +79,7 @@
   > On the frontend, we built a responsive React 18 single-page application using Vite, TypeScript, and Recharts, styled with an enterprise CSS design system.
   > The system strictly enforces the principle of backend authority: all data ingestion, timezone normalization, decision-cutoff filtering, and mathematical accuracy calculations are computed authoritatively by pure Python modules—never hardcoded or approximated in the UI."
 
-### 0:45–1:30 — Elexon Data Sources & Robust Ingestion
+### 5:30–6:15 (Part 2: 0:45–1:30) — Elexon Data Sources & Robust Ingestion
 - **Screen**: Open `backend/app/services/elexon_client.py`.
 - **Spoken Script**:
   > "Let's examine data ingestion in `elexon_client.py`. We connect directly to the official Elexon Insights Solution BMRS Stream APIs:
@@ -88,14 +88,14 @@
   > Querying an entire month of multi-fuel records in a single stream request can cause network timeouts. Our client implements bounded time-window chunking, retrieving data in reliable 7-day windows with automatic exponential backoff retries.
   > To ensure high performance and resilience during offline evaluation or upstream API outages, retrieved records are cached locally to disk, with automatic fallback and transparent data source tracking."
 
-### 1:30–2:15 — Data Cleaning & Decision-Time Cutoff Selection
+### 6:15–7:00 (Part 2: 1:30–2:15) — Data Cleaning & Decision-Time Cutoff Selection
 - **Screen**: Open `backend/app/services/data_cleaner.py` and `forecast_selector.py`.
 - **Spoken Script**:
   > "In `data_cleaner.py`, all timestamps are normalized into timezone-aware UTC datetime objects. For `FUELHH`, we apply a strict filter: `fuelType == 'WIND'`, immediately discarding all conventional and interconnect fuel types. Invalid or negative generation values are audited, and duplicate settlement periods are deterministically resolved by retaining the latest publication timestamp.
   > In `forecast_selector.py`, we implement the critical business rule for Day-Ahead purchasing decisions. For power delivered on day D, wholesale market orders close on day D-1. We calculate the gate closure cutoff—defaulting to 11:00 UTC D-1—and strictly filter forecasts to `publishTime <= cutoffTime`.
   > Among all eligible runs, we select the latest published forecast, recording the exact publication timestamp and lead time in hours. If no forecast was published prior to cutoff, the period is marked as missing—we never look ahead into future runs."
 
-### 2:15–3:00 — Matching Engine & Mathematical Metrics
+### 7:00–7:45 (Part 2: 2:15–3:00) — Matching Engine & Mathematical Metrics
 - **Screen**: Open `backend/app/services/matcher.py` and `backend/app/analytics/metrics.py`.
 - **Spoken Script**:
   > "In `matcher.py`, forecasts and actuals are joined on the target delivery period timestamp `startTime`.
@@ -103,20 +103,20 @@
   > For full auditability, the underlying half-hour readings are retained, and users can toggle half-hourly mode where the 744 unforecasted half-hours are audited transparently as `MISSING_FORECAST`.
   > In `metrics.py`, pure Python functions compute Signed Error, MAE, RMSE, Mean Signed Error / Bias, Maximum Absolute Error, and Weighted Absolute Percentage Error (WAPE), with conditional thresholding on actuals to protect against division-by-zero singularities."
 
-### 3:00–4:00 — Automated Testing Suite & Code Quality
+### 7:45–8:45 (Part 2: 3:00–4:00) — Automated Testing Suite & Code Quality
 - **Screen**: Terminal running `python -m pytest backend/tests -v` and `npm run test` in `frontend/`.
 - **Spoken Script**:
   > "Quality engineering is central to this project. Let's run our test suites:
   > First, the backend Pytest suite: running `python -m pytest backend/tests -v`.
-  > All 31 tests pass in under 4 seconds, with an additional opt-in live Elexon API integration test available. These tests verify hand-calculated mathematical examples, cutoff boundary conditions, post-cutoff forecast exclusion, decision-date window selection, corrupted cache fallback, and all FastAPI endpoints.
+  > All 51 deterministic tests pass cleanly in ~6 seconds, with 1 additional opt-in live Elexon API integration test available. These tests verify hand-calculated mathematical examples, cutoff boundary conditions, post-cutoff forecast exclusion, decision-date window selection, corrupted cache fallback, and all FastAPI endpoints.
   > Next, on the frontend: running `npm run test`.
   > All 5 Vitest component tests pass cleanly. Furthermore, running `npm run build` verifies that the TypeScript codebase compiles with zero type errors and generates a clean production bundle."
 
-### 4:00–5:00 — Docker Containerization, Deployment, & Engineering Trade-offs
+### 8:45–9:30 (Part 2: 4:00–4:45) — Docker Containerization, Deployment, & Engineering Trade-offs
 - **Screen**: Show `docker-compose.yml`, `backend/Dockerfile`, and `frontend/Dockerfile`.
 - **Spoken Script**:
   > "Finally, let's look at deployment.
-  > We containerized both services with multi-stage Dockerfiles. The frontend is built with Node.js and served via lightweight Nginx Alpine on port 3000, while the backend runs FastAPI via Uvicorn on port 8000 with Docker health checks and persistent cache volume mounts. Both services orchestrate seamlessly via `docker compose up --build`.
+  > We containerized both services with multi-stage Dockerfiles. The frontend is built with Node.js and served via lightweight Nginx Alpine on port 3000, while the backend runs FastAPI via Uvicorn on port 8000 with a dedicated non-root user, Docker health checks, and persistent cache volume mounts. Both services orchestrate seamlessly via `docker compose up --build`.
   > For production hosting, the React frontend is pre-configured for Vercel with SPA routing in `vercel.json`, and the backend includes a `Procfile` and environment configuration for Heroku or Render.
   > In terms of technical trade-offs: for a focused single-month dataset of ~1,500 periods, an in-memory Pandas pipeline with disk caching delivers sub-millisecond API response times without the maintenance or credential overhead of an external relational database.
   > WindForecast Analytics is fully tested, containerized, documented, and ready for production deployment. Thank you."
@@ -148,7 +148,7 @@
   5:30 - Elexon BMRS API Ingestion (FUELHH & WINDFOR Streams)
   6:15 - Data Cleaning & Decision-Time Cutoff Selection (D-1 11:00 UTC)
   7:00 - Matching Engine & Pure Mathematical Metrics
-  7:45 - Automated Test Suites (31 Pytest + 5 Vitest)
+  7:45 - Automated Test Suites (51 Pytest + 5 Vitest)
   8:45 - Docker Containerization & Deployment Architecture
 
   Repository: Public Anonymous GitHub Repository

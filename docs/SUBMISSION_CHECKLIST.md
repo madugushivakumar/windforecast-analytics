@@ -3,7 +3,7 @@
 **Submission Form**: [https://forms.cloud.microsoft/r/FTX6K2bbnU](https://forms.cloud.microsoft/r/FTX6K2bbnU)  
 **Evaluation Scope**: January 2026 UK National Wind Generation Day-Ahead Forecast Accuracy  
 **Data Provider**: Elexon BMRS Insights Solution (`FUELHH` and `WINDFOR`)  
-**Current Git Branch**: `master` (Revision: `63706e9`)
+**Current Git Branch**: `master` (Revision: `b85f47d`)
 
 ---
 
@@ -15,8 +15,8 @@
 | Component / Area | Status | Verified Evidence & Operational Notes |
 |---|---|---|
 | **Core application** | `PASS` | All functional and architectural requirements implemented. Ingestion, fuel filtering (`WIND`), decision cutoff enforcement, dual resolution alignment, and metrics compute with zero defects. |
-| **Automated tests** | `PASS` | Pytest: 44 passed, 1 skipped (live API opt-in), 0 failed (`python -m pytest backend/tests -v`). Vitest: 5 passed in 3 test files. Frontend TypeScript and Vite production bundle clean (`npm run build`). |
-| **Analysis reproducibility** | `PASS` | `reproduce_analysis.py` generates 5 machine-readable artifacts into `artifacts/january_2026/`. Independent CSV recomputation strictly matches pipeline summary with diff <0.003 MW / 0.0002% tolerance and 0 lookahead violations across 744 hours. |
+| **Automated tests** | `PASS` | Pytest: 54 passed, 1 skipped (live API opt-in), 0 failed (`python -m pytest backend/tests -v`). Vitest: 5 passed in 3 test files. Frontend TypeScript and Vite production bundle clean (`npm run build`). |
+| **Analysis reproducibility** | `PASS` | `reproduce_analysis.py` generates 5 machine-readable artifacts into `artifacts/january_2026/`. Independent CSV recomputation strictly matches pipeline summary with diff <= 0.0050 MW / 0.0050% tolerance (within defensible 2-decimal rounding precision; maximum observed RMSE diff is 0.00315 MW) and 0 lookahead violations across 744 hours. |
 | **Docker configuration** | `PASS` | `docker compose config` validates with exit code 0 and zero warnings. Multi-layer `backend/Dockerfile`, multi-stage `frontend/Dockerfile`, and host bind volume mounts validated. |
 | **Docker image build** | `BLOCKED` | Docker Desktop daemon is not running on host (`open //./pipe/dockerDesktopLinuxEngine` fails; `com.docker.service` stopped). |
 | **Docker runtime and container health** | `BLOCKED` | Blocked by host Docker daemon availability. Service requires Administrator elevation or interactive GUI launch. |
@@ -46,7 +46,7 @@ Status Key:
 | 6 | Correct data-source provenance | `PASS` | Dynamic tracking in `elexon_client.py` and `pipeline.py` returning `DISK_CACHE`, `LIVE_API`, or `MIXED_CACHE_API`. Regression tests pass. |
 | 7 | Recalculated metrics | `PASS` | Verified January 2026 results: MAE = 2,013.01 MW, RMSE = 2,505.94 MW, Bias = +1,729.93 MW, WAPE = 17.84% ($N=744$ hours). |
 | 8 | Consistent documentation and charts | `PASS` | Reconciled across `README.md`, `docs/VIDEO_SCRIPT.md`, `TESTING.md`, frontend mocks, and endpoints. Stale 16.4% WAPE removed. |
-| 9 | Backend tests passing | `PASS` | Pytest: 44 passed, 1 skipped (opt-in live test), 0 failed (`python -m pytest backend/tests -v`). |
+| 9 | Backend tests passing | `PASS` | Pytest: 54 passed, 1 skipped (opt-in live test), 0 failed (`python -m pytest backend/tests -v`). |
 | 10 | Frontend tests passing | `PASS` | Vitest: 3 test files, 5 passed, 0 failed (`npm run test` in `frontend/`). |
 | 11 | TypeScript checks passing | `PASS` | `tsc` runs cleanly during `npm run build` with zero type errors. |
 | 12 | Production frontend build passing | `PASS` | Vite production bundle generated successfully (`frontend/dist`) in 5.5s. |

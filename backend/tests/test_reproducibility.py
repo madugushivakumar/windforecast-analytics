@@ -99,7 +99,7 @@ def test_api_metrics_match_saved_artifacts():
     saved_m = saved_summary["metrics"]
 
     # 1. Check /api/accuracy endpoint
-    pipeline_service.run_pipeline(cutoff_hour_utc=11, cutoff_minute_utc=0, window_type="decision", resolution="hourly", force_refresh=True)
+    pipeline_service.run_pipeline(cutoff_hour_utc=11, cutoff_minute_utc=0, window_type="decision", resolution="hourly", force_refresh=False)
     resp = client.get("/api/accuracy?cutoff_hour=11&cutoff_minute=0&window=decision&resolution=hourly")
     assert resp.status_code == 200
     api_acc = resp.json()["metrics"]

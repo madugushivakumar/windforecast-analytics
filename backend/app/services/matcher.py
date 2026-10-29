@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Any, Tuple
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger("matcher")
@@ -62,12 +63,19 @@ class Matcher:
                 period_str = f"P{min(s_periods)}-P{max(s_periods)}" if s_periods else None
                 s_date = s_dates[0] if s_dates else None
                 
-                # Hourly power is only valid if both half-hourly intervals exist
-                if len(gens) == 2:
-                    mean_mw = float((gens[0] + gens[1]) / 2.0)
+                # Hourly power is only valid if both half-hourly intervals exist and are valid:
+                # 1. Exactly two intervals in the group
+                # 2. Timestamps match the expected :00 and :30 boundaries
+                # 3. Both values are non-null, finite, and non-negative
+                expected_times = {hour_dt, hour_dt + pd.Timedelta(minutes=30)}
+                actual_times = set(pd.to_datetime(grp["startTime"]))
+                valid_gens = [g for g in gens if g is not None and pd.notna(g) and np.isfinite(g) and g >= 0.0]
+
+                if len(gens) == 2 and actual_times == expected_times and len(valid_gens) == 2:
+                    mean_mw = float((valid_gens[0] + valid_gens[1]) / 2.0)
                     actual_mw_val = round(mean_mw, 2)
                 else:
-                    # Partial or incomplete hour: do not silently average or complete
+                    # Partial, incomplete, misaligned, or invalid hour: do not silently average or complete
                     actual_mw_val = None
                 
                 agg_rows.append({
@@ -104,12 +112,17 @@ class Matcher:
         if not merged.empty:
             start_times = pd.to_datetime(merged["startTime"])
             deliv_dates = start_times.dt.date
-            derived_decision_dates = (deliv_dates - pd.Timedelta(days=1)).astype(str)
-            if "decision_date" not in merged.columns or merged["decision_date"].isna().any():
-                merged["decision_date"] = merged.get("decision_date", pd.Series(index=merged.index)).fillna(derived_decision_dates)
-            if "decision_cutoff" not in merged.columns or merged["decision_cutoff"].isna().any():
-                derived_cutoffs = pd.to_datetime(merged["decision_date"], utc=True) + pd.Timedelta(hours=11)
-                merged["decision_cutoff"] = merged.get("decision_cutoff", pd.Series(index=merged.index)).fillna(derived_cutoffs)
+            derived_decision_dates = pd.Series((deliv_dates - pd.Timedelta(days=1)).astype(str), index=merged.index)
+            if "decision_date" not in merged.columns:
+                merged["decision_date"] = derived_decision_dates
+            else:
+                merged["decision_date"] = merged["decision_date"].combine_first(derived_decision_dates)
+
+            derived_cutoffs = pd.to_datetime(merged["decision_date"], utc=True) + pd.Timedelta(hours=11)
+            if "decision_cutoff" not in merged.columns:
+                merged["decision_cutoff"] = derived_cutoffs
+            else:
+                merged["decision_cutoff"] = merged["decision_cutoff"].combine_first(derived_cutoffs)
 
         # Classify status
         has_forecast = merged["forecast_mw"].notna()
