@@ -1,88 +1,173 @@
 # WindForecast Analytics: UK National Wind Generation Day-Ahead Forecast Accuracy (January 2026)
 
-[![Backend Tests](https://img.shields.io/badge/Pytest-51%20passed-success)](./backend/tests)
-[![Frontend Tests](https://img.shields.io/badge/Vitest-5%20passed-success)](./frontend/src/tests)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Verified-blue)](./frontend)
-[![Python](https://img.shields.io/badge/Python-3.11-blue)](./backend)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green)](./backend)
-[![React](https://img.shields.io/badge/React-18-cyan)](./frontend)
-[![Docker](https://img.shields.io/badge/Docker-Config%20Verified-blue)](./docker-compose.yml)
+![Pytest](https://img.shields.io/badge/Pytest-51%20passed-brightgreen)
+![Vitest](https://img.shields.io/badge/Vitest-5%20passed-brightgreen)
+![TypeScript](https://img.shields.io/badge/TypeScript-Verified-blue)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-green)
+![React](https://img.shields.io/badge/React-18-61DAFB)
+![Docker](https://img.shields.io/badge/Docker-Compose%20Configured-blue)
+
+**WindForecast Analytics** is a full-stack analytics platform for evaluating UK national wind-generation day-ahead forecasts against actual wind generation using official Elexon Insights Solution (BMRS) data.
+
+The platform combines a Python FastAPI analytics engine with a React and TypeScript dashboard to evaluate forecast accuracy, enforce configurable purchasing-decision cutoffs, inspect forecast publication histories, and audit data quality.
+
+> **Evaluation scope:** January 2026 purchasing-decision dates, using a configurable Day-Ahead decision cutoff. The default 11:00 UTC cutoff is an operational modelling assumption, not a universal exchange deadline.
+
+---
+
+## Table of Contents
+
+- [1. Project Overview](#1-project-overview--business-problem)
+- [2. Key Features](#2-key-features)
+- [3. Technology Stack](#3-technology-stack)
+- [4. System Architecture](#4-system-architecture)
+- [5. Official Data Sources](#5-official-data-sources)
+- [6. Evaluation Scope and Decision Cutoff](#6-evaluation-scope-and-decision-cutoff)
+- [7. Data Cleaning and Resolution Alignment](#7-data-cleaning-and-resolution-alignment)
+- [8. Forecast Accuracy Metrics](#8-forecast-accuracy-metrics)
+- [9. January 2026 Results](#9-january-2026-results)
+- [10. Project Structure](#10-project-structure)
+- [11. Prerequisites](#11-prerequisites)
+- [12. Local Development Setup](#12-local-development-setup)
+- [13. Docker Setup](#13-docker-setup)
+- [14. Testing and Reproducibility](#14-testing-and-reproducibility)
+- [15. API Documentation](#15-api-documentation)
+- [16. Configuration](#16-configuration)
+- [17. Deployment](#17-deployment)
+- [18. AI Tools Disclosure](#18-ai-tools-disclosure)
+- [19. Limitations and Future Improvements](#19-limitations-and-future-improvements)
+- [20. Security and Data Integrity](#20-security-and-data-integrity)
+- [21. Submission Status](#21-submission-status)
 
 ---
 
 ## 1. Project Overview & Business Problem
 
-In the United Kingdom wholesale electricity market, energy utilities purchase power on day-ahead wholesale power exchanges (e.g., EPEX SPOT and Nord Pool GB). Energy traders and commercial dispatchers place binding volume and price bids on day $D-1$ for physical delivery of electricity across settlement periods 1 to 48 on day $D$.
+In the United Kingdom wholesale electricity market, energy utilities purchase electricity through day-ahead wholesale markets. Traders and commercial dispatchers must make purchasing decisions before the corresponding electricity is physically delivered.
 
-Because wind generation is weather-dependent and highly intermittent, commercial utilities face substantial volume risk and cash-out imbalance penalties when generation diverges from forecast. Energy procurement desks require an authoritative analytics system to answer two fundamental commercial questions:
-1. **What was the latest authoritative wind forecast available when purchasing decisions were executed at Day-Ahead gate closure?**
-2. **What was the quantitative accuracy of those forecasts when evaluated against delivered transmission outturn in January 2026?**
+Wind generation is weather-dependent and variable. Differences between forecast and actual generation can create volume risk, operational uncertainty, and potential imbalance costs.
 
-**WindForecast Analytics** is a production-quality, mathematically rigorous full-stack analytics platform built to ingest official Elexon Insights Solution (BMRS) data, enforce day-ahead auction decision cutoffs with zero lookahead bias, match forecasts and actuals strictly on delivery period timestamps, compute quantitative error metrics (MAE, RMSE, Mean Signed Error / Bias, WAPE), and present insights through a responsive enterprise dashboard.
+WindForecast Analytics addresses two questions:
 
----
+1. **Forecast availability:** What was the latest eligible wind-generation forecast available at the configured purchasing-decision cutoff?
+2. **Forecast accuracy:** How closely did that forecast match the actual national wind generation recorded for the corresponding delivery periods?
 
-## 2. Main Features
+The application provides a reproducible analytical workflow that:
 
-- **Authoritative Elexon BMRS Ingestion**: Connects directly to official Elexon Insights Solution stream endpoints for `FUELHH` (outturn generation) and `WINDFOR` (day-ahead national wind forecasts) with bounded 7-day chunking, exponential backoff retries, and local disk cache fallback.
-- **Strict Fuel Filtering**: Filters `FUELHH` generation strictly to `fuelType == 'WIND'`, discarding all conventional, nuclear, and interconnection flows.
-- **Day-Ahead Decision Cutoff Enforcement**: Enforces market gate closure rules with minute-level precision (default: 11:00 UTC on day $D-1$ as an operational utility purchasing assumption; fully configurable to official exchange deadlines like 09:20 UTC for EPEX SPOT GB). Only forecasts published strictly prior to or at gate closure (`publishTime <= cutoffTime`) are eligible. The latest eligible vintage is selected with zero future lookahead.
-- **January 2026 Decision-Date Window Filtering**: Evaluates all purchasing decisions made between `2026-01-01 00:00:00 UTC` and `2026-02-01 00:00:00 UTC` (exclusive), corresponding to deliveries from `2026-01-02 00:00:00 UTC` through `2026-02-01 23:00:00 UTC` (or `23:30:00 UTC` half-hourly).
-- **Dual Resolution Alignment**:
-  - **Hourly Aggregated Evaluation (Primary / Evaluated)**: Pairs hourly WINDFOR forecasts with arithmetic-mean actual generation across the two half-hours in that hour: $A_H = \frac{A_{H:00} + A_{H:30}}{2} \text{ MW}$, yielding 100.0% coverage across all 744 hours in the 31-day delivery span.
-  - **Half-Hourly Granular Evaluation (Transparency Mode)**: Evaluates forecasts strictly against the matching `:00` half-hour, transparently reporting the 744 `:30` periods as `MISSING_FORECAST` (50.0% coverage) with zero artificial interpolation.
-- **Pure Mathematical Metric Calculations**: Hand-calculated and automated unit tests for:
-  - **Mean Absolute Error (MAE)**: Measures average expected forecast error magnitude in MW.
-  - **Root Mean Squared Error (RMSE)**: Penalizes severe forecasting misses in MW.
-  - **Mean Signed Error (Bias)**: Quantifies systematic over- or under-forecasting tendency in MW.
-  - **Weighted Absolute Percentage Error (WAPE)**: Safe aggregate percentage error without division-by-zero singularities.
-  - **Conditional MAPE**: Explicitly documents and filters near-zero actual generation lulls ($A_t < 100 \text{ MW}$) to prevent infinite percentage distortions.
-- **Interactive Enterprise React Frontend**:
-  - **Page A (Overview Dashboard)**: Executive KPIs, full-month forecast vs. actual outturn time-series chart, data coverage health indicator, resolution mode toggle, and commercial market interpretations.
-  - **Page B (Forecast Comparison)**: Delivery window date filter, week presets, interactive time-series zoom, and a **Forecast Vintage History Inspector** revealing all published forecast runs and gate closure eligibility.
-  - **Page C (Accuracy Analysis)**: Error distribution histogram, residual error trends, and top 10 largest absolute error discrepancy periods.
-  - **Page D (Data Explorer)**: Paginated, multi-column sortable, filterable table of delivery periods, cutoffs, forecasts, actuals, signed errors, and direct CSV export of verified analyzed records.
-- **Data Quality Audit Trail & Provenance**: Full accounting of records fetched, wind records retained, duplicates resolved, missing actuals, missing forecasts, and explicit data source provenance (`DISK_CACHE`, `LIVE_API`, `MIXED_CACHE_API`).
+- Ingests official Elexon wind forecast and generation data.
+- Applies configurable decision-cutoff rules.
+- Selects the latest eligible forecast vintage.
+- Matches forecasts and actuals using delivery timestamps.
+- Calculates quantitative forecast error metrics.
+- Identifies missing data, duplicate records, and invalid observations.
+- Presents the results through an interactive analytics dashboard.
+- Exports analyzed observations for further inspection.
 
----
+The objective is to provide transparent, auditable evidence of forecast performance—not to claim guaranteed trading profits or calculate financial losses without a separate validated market-pricing model.
+
+## 2. Key Features
+
+### Official data ingestion
+
+- Retrieves data from the Elexon Insights Solution (BMRS) API.
+- Supports FUELHH actual generation and WINDFOR forecast data.
+- Uses bounded date-range chunking and retry handling.
+- Supports local caching to reduce repeated requests and improve reproducibility.
+
+### Wind-only generation filtering
+
+Actual generation records are filtered using:
+
+`fuelType == "WIND"`
+
+This excludes other fuel categories from the wind-generation evaluation.
+
+### Decision-cutoff-aware forecast selection
+
+- Supports configurable cutoff hours and minutes.
+- Uses publication timestamps to determine forecast eligibility.
+- Excludes forecasts published after the decision cutoff.
+- Selects the latest eligible forecast vintage.
+- Preserves selected publication timestamps for auditing.
+
+### Forecast and actual comparison
+
+- Aligns records using delivery-period timestamps.
+- Supports hourly aggregation and half-hourly transparency analysis.
+- Reports missing forecasts rather than silently fabricating observations.
+- Calculates signed errors and standard forecast accuracy metrics.
+
+### Interactive analytics dashboard
+
+**Overview Dashboard**
+- Executive KPI cards.
+- Forecast-versus-actual time-series chart.
+- Data coverage indicators.
+- Resolution selection and commercial interpretation.
+
+**Forecast Comparison**
+- Delivery-date filters and date presets.
+- Interactive forecast and actual comparison.
+- Forecast vintage history inspection.
+- Decision-cutoff eligibility visibility.
+
+**Accuracy Analysis**
+- Error distribution.
+- Residual error trends.
+- Largest absolute discrepancies.
+- Forecast accuracy metrics.
+
+**Data Explorer**
+- Paginated observations table.
+- Sorting and filtering.
+- Delivery timestamps, forecasts, actuals, cutoffs, and errors.
+- CSV export of analyzed records.
+
+### Data quality and provenance
+
+The pipeline is designed to track data cleaning, duplicate resolution, missing records, invalid observations, and data source provenance. Exact counts should be taken from the generated audit artifacts for each run.
 
 ## 3. Technology Stack
 
-| Layer | Technologies | Rationale |
-|---|---|---|
-| **Frontend** | React 18, TypeScript, Vite, Recharts, Lucide Icons | High-performance SPA with modern dark glassmorphism design, responsive layouts, and interactive time-series visualizations. |
-| **Backend** | Python 3.11, FastAPI, Pandas, HTTPX, Pydantic v2 | Authoritative analytics engine, robust async HTTP client, and automatic OpenAPI documentation. |
-| **Data Cleaning** | Pandas, Timezone-aware UTC datetimes | Efficient vector joins, deterministic duplicate resolution, and strict data quality auditing. |
-| **Testing** | Pytest, Vitest, React Testing Library, JSDOM | 49 backend Pytest tests, 1 opt-in live integration test, and 5 frontend Vitest tests. |
-| **Containerization** | Docker, Docker Compose, Nginx Alpine | Multi-stage reproducible container builds with health checks and corrected cache volume mounts. |
-| **Deployment** | Vercel (Frontend), Heroku / Render (Backend) | Production-ready with SPA client-side routing and CORS configuration. |
+| Layer | Technologies |
+|---|---|
+| Frontend | React 18, TypeScript, Vite |
+| Visualization | Recharts, Lucide Icons |
+| Backend | Python 3.11+, FastAPI, Pydantic |
+| Data processing | Pandas, timezone-aware Python datetimes |
+| HTTP client | HTTPX |
+| Backend testing | Pytest |
+| Frontend testing | Vitest, React Testing Library, JSDOM |
+| Containerization | Docker, Docker Compose, Nginx Alpine |
+| Deployment configuration | Vercel frontend configuration, backend process/container configuration |
 
----
+## 4. System Architecture
 
-## 4. Architecture Diagram
+The application follows a layered architecture. The backend handles data retrieval, cleaning, forecast selection, timestamp matching, and metric calculations. The frontend consumes the API and presents the resulting analysis.
 
 ```mermaid
 graph TD
-    subgraph External Sources
-        Elexon["Elexon BMRS API (Insights Solution)"]
+    subgraph Sources["External Data Sources"]
+        Elexon["Elexon Insights Solution - BMRS"]
     end
 
-    subgraph Python Backend (FastAPI :8000)
-        Client["ElexonApiClient (HTTPX with chunking & backoff)"]
-        Cache["Disk & In-Memory Pipeline Cache (data/cache/)"]
-        Cleaner["DataCleaner (Fuel filtering, deduplication, DQ audit)"]
-        Selector["ForecastSelector (Day-Ahead Cutoff D-1 11:00 UTC)"]
-        Matcher["Matcher (Delivery period startTime alignment & hourly aggregation)"]
-        Analytics["AnalyticsEngine (MAE, RMSE, Bias, distributions)"]
-        FastAPI["FastAPI REST Endpoints (/api/*, /health)"]
+    subgraph Backend["Python Backend - FastAPI :8000"]
+        Client["Elexon API Client"]
+        Cache["Disk and In-Memory Cache"]
+        Cleaner["Data Cleaner and Quality Audit"]
+        Selector["Forecast Selector and Decision Cutoff"]
+        Matcher["Timestamp Matcher and Aggregator"]
+        Analytics["Forecast Accuracy Metrics"]
+        API["FastAPI REST Endpoints"]
     end
 
-    subgraph React Frontend (Vite :3000)
-        UIStore["React State & API Client"]
+    subgraph Frontend["React Frontend - Vite"]
+        APIClient["API Client and State"]
         Dashboard["Overview Dashboard"]
-        Comparison["Forecast Comparison & Vintages"]
-        Accuracy["Accuracy & Error Analysis"]
-        Explorer["Data Explorer & CSV Exporter"]
+        Comparison["Forecast Comparison"]
+        Accuracy["Accuracy Analysis"]
+        Explorer["Data Explorer and CSV Export"]
     end
 
     Elexon --> Client
@@ -91,321 +176,714 @@ graph TD
     Cleaner --> Selector
     Selector --> Matcher
     Matcher --> Analytics
-    Analytics --> FastAPI
-    FastAPI --> UIStore
-    UIStore --> Dashboard
-    UIStore --> Comparison
-    UIStore --> Accuracy
-    UIStore --> Explorer
+    Analytics --> API
+    API --> APIClient
+    APIClient --> Dashboard
+    APIClient --> Comparison
+    APIClient --> Accuracy
+    APIClient --> Explorer
 ```
 
----
+### Data flow
 
-## 5. Official Data Sources & Schema
+1. Request the required FUELHH and WINDFOR data.
+2. Normalize timestamps to UTC and validate incoming records.
+3. Filter actual generation to wind records.
+4. Resolve duplicates according to the documented selection rules.
+5. Apply the configured forecast publication cutoff.
+6. Select the latest eligible forecast vintage.
+7. Match forecasts to actual delivery periods.
+8. Aggregate actual generation when hourly evaluation is selected.
+9. Calculate accuracy metrics and data quality summaries.
+10. Return the results through the REST API for dashboard presentation and export.
 
-WindForecast Analytics queries the live official Elexon Insights Solution (BMRS) APIs:
-1. **FUELHH Dataset** (`https://data.elexon.co.uk/bmrs/api/v1/datasets/FUELHH/stream`):
-   - `startTime`: Start of 30-minute settlement period in ISO 8601 UTC.
-   - `publishTime`: Timestamp when outturn reading was released.
-   - `fuelType`: Categorical fuel identifier. **Filtered exclusively to `fuelType == 'WIND'`**.
-   - `generation`: Delivered generation in Megawatts (MW).
-   - `settlementDate`: Calendar delivery date.
-   - `settlementPeriod`: Half-hour period index (1 to 48).
-2. **WINDFOR Dataset** (`https://data.elexon.co.uk/bmrs/api/v1/datasets/WINDFOR/stream`):
-   - `startTime`: Target delivery period timestamp in ISO 8601 UTC.
-   - `publishTime`: Vintage timestamp when forecast was generated by National Grid ESO.
-   - `generation`: Forecasted wind generation in Megawatts (MW).
+## 5. Official Data Sources
 
----
+The platform uses the official Elexon Insights Solution (BMRS) stream endpoints.
 
-## 6. January 2026 Scope & Decision Cutoff Rules
+### FUELHH — Actual generation
 
-- **Decision-Date Window (Primary Focus)**: Purchasing decisions executed in January 2026 (`2026-01-01 00:00:00 UTC` through `2026-02-01 00:00:00 UTC` exclusive). Under the Day-Ahead rule, decisions made on January 1 deliver on January 2; decisions made on January 31 deliver on February 1 (all 24 hours of February 1 are included). Decisions executed on December 31, 2025 (delivering January 1, 2026) belong to December 2025 commercial decisions and are excluded.
-- **Delivery Window (Alternative Toggle)**: Delivery periods occurring strictly within January 2026 (`2026-01-01 00:00:00 UTC` through `2026-01-31 23:00:00 UTC` hourly or `23:30:00 UTC` half-hourly).
-- **Gate Closure Cutoff Logic & Market Rules**:
-  - For delivery on Day $D$, day-ahead wholesale auction orders close on Day $D-1$.
-  - **Verified Official Market Closures**:
-    - **EPEX SPOT GB 60min Day-Ahead Auction**: Order book closes at **09:20 GMT/UTC** daily on Day $D-1$ ([EPEX SPOT Market Data](https://www.epexspot.com/en/market-data)).
-    - **Nord Pool GB Day-Ahead Auction (N2EX)**: Order book closes at **09:50 GMT/UTC** (10:50 CET) daily on Day $D-1$ ([Nord Pool GB Auction](https://www.nordpoolgroup.com/trading/Day-ahead-trading/Auction-GB/)).
-    - **EPEX SPOT GB 30min Day-Ahead Auction**: Order book closes at **15:30 GMT/UTC** daily on Day $D-1$.
-  - **Default Project Cutoff (11:00 UTC)**: Configured as an **operational utility purchasing decision assumption** (aligned with the European SDAC 12:00 CET/11:00 UTC reference). This enables commercial utilities to incorporate National Grid ESO's **10:30 UTC WINDFOR forecast release** prior to midday operations.
-  - **Configurability**: Minute-level precision is supported via `--cutoff-hour` and `--cutoff-minute` (e.g. `09:20` for official EPEX SPOT GB or `11:00` for operational utility baseline).
-  - **Eligibility Rule**: A forecast vintage is eligible if and only if `publishTime <= decisionCutoff`. Forecast revisions published strictly after the cutoff are excluded to prevent future lookahead bias.
-  - **Selection Rule**: The system selects the forecast with $\max(\text{publishTime})$ among all eligible records, preserving its original publication timestamp for auditing.
+Endpoint:
 
----
+https://data.elexon.co.uk/bmrs/api/v1/datasets/FUELHH/stream
 
-## 7. Data Cleaning & Resolution Alignment Methodology
+Relevant fields:
 
-1. **Timezone Normalization**: All incoming timestamps are parsed and converted to timezone-aware UTC datetime objects (`datetime.timezone.utc`).
-2. **Negative & Malformed Record Detection**: Records with negative generation or unparseable values are audited and dropped.
-3. **Deterministic Duplicate Resolution**: If multiple records exist for identical delivery `startTime`, the record with the latest `publishTime` is retained, and a duplicate event is logged in the Data Quality report.
-4. **Resolution Finding & Alignment**:
-   - In January 2026, `FUELHH` reports 30-minute settlement periods (1,488 half-hours), while `WINDFOR` national forecasts are published at hourly resolution (`:00`). Both streams report power in **Megawatts (MW)**.
-   - **Hourly Aggregated Evaluation (Primary / Evaluated)**: Pairs each hourly forecast with the arithmetic-mean actual generation across the two half-hours in that hour: $A_H = \frac{A_{H:00} + A_{H:30}}{2} \text{ MW}$. This achieves **100.0% coverage across all 744 hours** in the 31-day delivery span without making unsupported assumptions. The underlying `:00` and `:30` half-hour actuals are preserved for full auditability.
-   - **Half-Hourly Granular Mode (Transparency Mode)**: Evaluates forecasts strictly against the matching `:00` half-hour, transparently reporting the 744 `:30` periods as `MISSING_FORECAST` (50.0% coverage) with zero artificial interpolation.
+| Field | Meaning |
+|---|---|
+| `startTime` | Start of the settlement period |
+| `publishTime` | Publication timestamp of the observation |
+| `fuelType` | Fuel category |
+| `generation` | Recorded generation in MW |
+| `settlementDate` | Settlement delivery date |
+| `settlementPeriod` | Settlement-period index |
 
----
+Only records whose `fuelType` is `WIND` are eligible for the actual-generation evaluation.
 
-## 8. Forecast Accuracy Metric Definitions
+### WINDFOR — Wind-generation forecasts
 
-Let $F_t$ = Day-Ahead forecast generation for delivery period $t$, $A_t$ = Actual wind generation for delivery period $t$, and $e_t = F_t - A_t$:
-- **Signed Error ($e_t$)**: $e_t = F_t - A_t$ (Positive indicates over-forecasting; negative indicates under-forecasting).
-- **Mean Absolute Error (MAE)**:
-  $$\text{MAE} = \frac{1}{N} \sum_{t=1}^N |F_t - A_t| \quad [\text{MW}]$$
-- **Root Mean Squared Error (RMSE)**:
-  $$\text{RMSE} = \sqrt{\frac{1}{N} \sum_{t=1}^N (F_t - A_t)^2} \quad [\text{MW}]$$
-- **Mean Signed Error / Bias**:
-  $$\text{Bias} = \frac{1}{N} \sum_{t=1}^N (F_t - A_t) \quad [\text{MW}]$$
-- **Weighted Absolute Percentage Error (WAPE)**:
-  $$\text{WAPE} = \frac{\sum_{t=1}^N |F_t - A_t|}{\sum_{t=1}^N A_t} \times 100\%$$
-- **Conditional MAPE**: Evaluated strictly on periods where $A_t \ge 100 \text{ MW}$ to avoid dividing by near-zero wind lull observations.
+Endpoint:
 
-### Verified January 2026 Results (Day-Ahead 11:00 UTC D-1 Cutoff, Decision Window)
+https://data.elexon.co.uk/bmrs/api/v1/datasets/WINDFOR/stream
 
-#### Primary Evaluated Mode: Hourly Aggregation
-- **Decision Window**: `2026-01-01 00:00:00 UTC` to `2026-02-01 00:00:00 UTC` (exclusive)
-- **Delivery Span**: `2026-01-02 00:00:00 UTC` to `2026-02-01 23:00:00 UTC`
-- **Sample Size ($N$)**: **744 matched hourly delivery periods** (100.0% coverage of 744 expected hours)
-- **Mean Absolute Error (MAE)**: **2,013.01 MW**
-- **Root Mean Squared Error (RMSE)**: **2,505.94 MW**
-- **Mean Signed Error (Bias)**: **+1,729.93 MW** (Systematic over-forecasting)
-- **Maximum Absolute Error**: **6,833.00 MW**
-- **Minimum Signed Error**: **-4,128.00 MW**
-- **Maximum Signed Error**: **+6,833.00 MW**
-- **Error Standard Deviation**: **1,814.25 MW**
-- **WAPE**: **17.84%** (Total Absolute Error: 1,497,682 MW / Total Generation: 8,396,971 MW)
-- **Conditional MAPE**: **21.61%** (744/744 periods with $A_t \ge 100 \text{ MW}$)
-- **Data Source**: Elexon BMRS API (`DISK_CACHE` / `LIVE_API`)
+Relevant fields:
 
-#### Transparency Mode: Half-Hourly Granular
-- **Sample Size ($N$)**: 744 matched half-hours (50.0% coverage of 1,488 expected periods; 744 unforecasted `:30` periods)
-- **MAE**: **1,995.57 MW**
-- **RMSE**: **2,498.82 MW**
-- **Bias**: **+1,727.98 MW**
-- **Maximum Absolute Error**: **6,857.00 MW**
-- **WAPE**: **17.68%**
+| Field | Meaning |
+|---|---|
+| `startTime` | Target delivery-period timestamp |
+| `publishTime` | Forecast publication or vintage timestamp |
+| `generation` | Forecast generation in MW |
 
----
+The implementation should be checked against the current API schema and the actual returned records before assuming every optional field is present.
 
-## 9. Project Directory Structure
+**Data provenance:** The application may use live API responses, cached data, or a combination of both. Refer to the run manifest and data quality report to determine which source was used for a particular analysis.
+
+## 6. Evaluation Scope and Decision Cutoff
+
+### Primary analysis: January 2026 decision dates
+
+The primary evaluation covers purchasing-decision timestamps in this interval:
+
+- Start: `2026-01-01 00:00:00 UTC`
+- End: `2026-02-01 00:00:00 UTC`, exclusive
+
+Under the configured Day-Ahead D−1 modelling assumption, decisions made in January can correspond to delivery periods extending into February.
+
+The documented expected hourly delivery span is:
+
+- Start: `2026-01-02 00:00:00 UTC`
+- End: `2026-02-01 23:00:00 UTC`, inclusive
+
+This represents 744 hourly delivery periods.
+
+**Important distinction:** A January decision-date evaluation is not the same as an evaluation of deliveries occurring strictly during January.
+
+### Alternative analysis: January delivery dates
+
+The application also supports a delivery-date window covering January 2026:
+
+- Start: `2026-01-01 00:00:00 UTC`
+- End: `2026-02-01 00:00:00 UTC`, exclusive
+
+Use the configured window mode to distinguish these two evaluations.
+
+### Decision cutoff and forecast eligibility
+
+For a delivery date D, the project models a purchasing decision made on D−1.
+
+The default cutoff is **11:00 UTC on D−1**. This is an operational modelling assumption that can be changed to reflect a separately verified market deadline.
+
+A forecast vintage is eligible when:
+
+\[
+publishTime \leq decisionCutoff
+\]
+
+The selected forecast is the eligible record with the latest publication timestamp:
+
+\[
+F_t = generation_{\,\arg\max(publishTime)}
+\]
+
+subject to the eligibility constraint.
+
+Forecast revisions published after the cutoff must not influence the decision-time forecast.
+
+### Configurable cutoff
+
+The analysis script supports hour and minute parameters. For example:
+
+```bash
+python backend/reproduce_analysis.py \
+  --cutoff-hour 11 \
+  --cutoff-minute 0 \
+  --window decision \
+  --resolution hourly
+```
+
+Confirm the available options with the script's help output before using this command with a different configuration.
+
+**Market-rule note:** Do not interpret the default cutoff as an official deadline for every exchange or auction product. Any exchange-specific cutoff must be verified against the relevant official market documentation.
+
+## 7. Data Cleaning and Resolution Alignment
+
+### Timestamp normalization
+
+Incoming timestamps are parsed and normalized to timezone-aware UTC datetimes before matching.
+
+### Invalid observations
+
+Records with malformed timestamps, invalid generation values, or negative generation are subject to validation and auditing. The implementation's actual rules determine which records are rejected and how the reasons are reported.
+
+### Duplicate handling
+
+Duplicate delivery-period records are resolved deterministically according to the implemented data-cleaning rules. The data quality report should identify the number of duplicates handled.
+
+### Hourly aggregation — primary evaluation
+
+FUELHH actual generation is reported at half-hourly resolution, while the documented WINDFOR evaluation uses hourly forecasts.
+
+For hourly evaluation, the project calculates the arithmetic mean of the two half-hourly actual power observations:
+
+\[
+A_H = \frac{A_{H:00}+A_{H:30}}{2}
+\]
+
+where:
+
+- \(A_{H:00}\) is the first half-hour's average generation in MW.
+- \(A_{H:30}\) is the second half-hour's average generation in MW.
+- \(A_H\) is the hourly average power in MW.
+
+This is an average of power measurements, not a sum of MW values.
+
+The reported primary analysis contains 744 matched hourly periods. Verify the actual coverage against the generated audit report before relying on that figure.
+
+### Half-hourly transparency mode
+
+The half-hourly mode matches only the half-hour periods supported by the forecast data. Under the documented approach, an hourly forecast is matched to the corresponding `:00` half-hour, while the `:30` period is reported as missing a matching forecast.
+
+No artificial interpolation is used in this mode.
+
+The documented expected coverage is 744 matched periods out of 1,488 half-hourly periods, or 50%.
+
+## 8. Forecast Accuracy Metrics
+
+Let:
+
+- \(F_t\) = forecast generation in MW.
+- \(A_t\) = actual generation in MW.
+- \(N\) = number of matched observations.
+
+### Signed error
+
+\[
+e_t = F_t-A_t
+\]
+
+- Positive error: over-forecasting.
+- Negative error: under-forecasting.
+
+### Mean Absolute Error (MAE)
+
+\[
+MAE = \frac{1}{N}\sum_{t=1}^{N}|F_t-A_t|
+\]
+
+MAE measures the average absolute difference between forecasts and actual generation, in MW. Lower values indicate smaller average errors.
+
+### Root Mean Squared Error (RMSE)
+
+\[
+RMSE = \sqrt{\frac{1}{N}\sum_{t=1}^{N}(F_t-A_t)^2}
+\]
+
+RMSE penalizes large errors more strongly than MAE. It is measured in MW.
+
+### Mean Signed Error (Bias)
+
+\[
+Bias = \frac{1}{N}\sum_{t=1}^{N}(F_t-A_t)
+\]
+
+Positive bias indicates systematic over-forecasting on average; negative bias indicates under-forecasting on average.
+
+### Weighted Absolute Percentage Error (WAPE)
+
+\[
+WAPE =
+\frac{\sum_{t=1}^{N}|F_t-A_t|}
+{\sum_{t=1}^{N}|A_t|}
+\times 100
+\]
+
+WAPE measures total absolute error relative to total absolute actual generation. If the denominator is zero, the result must be handled explicitly rather than silently producing an invalid percentage.
+
+### Conditional Mean Absolute Percentage Error (MAPE)
+
+MAPE is calculated only for observations where actual generation satisfies the configured threshold:
+
+\[
+A_t \geq 100\text{ MW}
+\]
+
+For that eligible subset \(S\):
+
+\[
+MAPE =
+\frac{100}{|S|}
+\sum_{t\in S}
+\left|\frac{F_t-A_t}{A_t}\right|
+\]
+
+The threshold reduces distortions from near-zero actual generation. It must be disclosed alongside the result because conditional MAPE does not represent every observation.
+
+## 9. January 2026 Results
+
+The following values are the project's previously reported results. They must be checked against the latest reproducible analysis artifacts before being treated as final.
+
+### Primary mode: Hourly aggregation
+
+| Measure | Reported result |
+|---|---:|
+| Decision window | January 1–31, 2026 |
+| Expected matched hourly periods | 744 |
+| Reported coverage | 100% |
+| MAE | 2,013.01 MW |
+| RMSE | 2,505.94 MW |
+| Mean signed error | +1,729.93 MW |
+| Maximum absolute error | 6,833 MW |
+| Minimum signed error | −4,128 MW |
+| Maximum signed error | +6,833 MW |
+| Error standard deviation | 1,814.25 MW |
+| WAPE | 17.84% |
+| Conditional MAPE | 21.61% |
+
+Previously reported aggregate values:
+
+- Total absolute error: 1,497,682 MW-observations.
+- Sum of actual hourly generation values: 8,396,971 MW-observations.
+
+These aggregates represent sums of hourly power observations; they are not energy quantities in MWh.
+
+### Transparency mode: Half-hourly matching
+
+| Measure | Reported result |
+|---|---:|
+| Expected half-hourly periods | 1,488 |
+| Matched periods | 744 |
+| Reported coverage | 50% |
+| MAE | 1,995.57 MW |
+| RMSE | 2,498.82 MW |
+| Mean signed error | +1,727.98 MW |
+| Maximum absolute error | 6,857 MW |
+| WAPE | 17.68% |
+
+### Interpretation
+
+The reported positive mean signed error indicates that the selected forecasts were higher than actual generation on average under the documented error convention.
+
+MAE and RMSE describe forecast error magnitude, while WAPE expresses aggregate absolute error relative to aggregate actual generation.
+
+These are statistical performance measures. They do not directly quantify imbalance charges, procurement losses, or achievable financial savings. Such claims require additional validated market prices, settlement rules, and a separate financial model.
+
+**Verification requirement:** Treat the numbers above as reported results until they have been reconciled with the latest `analysis_summary.json`, observation CSV, data quality report, and validation log.
+
+## 10. Project Structure
+
+The following is the intended project structure. Confirm file existence against the actual repository before relying on the listing.
 
 ```text
 windforecast-analytics/
-├── .env.example                     # Example environment variables
-├── .gitignore                       # Git exclusions for Python, Node, and secrets
-├── docker-compose.yml               # Docker Compose orchestration
-├── README.md                        # Master project documentation
-├── PROJECT_PLAN.md                  # Comprehensive engineering plan
-├── REQUIREMENTS_TRACEABILITY.md     # Traceability matrix mapping requirements to tests
-├── IMPLEMENTATION_STATUS.md         # Phase-by-phase implementation tracker
+├── .env.example
+├── .gitignore
+├── docker-compose.yml
+├── README.md
+├── PROJECT_PLAN.md
+├── REQUIREMENTS_TRACEABILITY.md
+├── IMPLEMENTATION_STATUS.md
 ├── docs/
-│   ├── ARCHITECTURE.md              # System design, data flows, and trade-offs
-│   ├── DATA_DICTIONARY.md           # Schema, types, units, and transformation rules
-│   ├── DATA_ASSUMPTIONS.md          # Market rules, cutoffs, and edge-case handling
-│   ├── TESTING.md                   # Automated test commands, results, acceptance checklist
-│   ├── DEPLOYMENT.md                # Vercel, Heroku, and Docker deployment guide
-│   ├── VIDEO_SCRIPT.md              # 10-minute demo script (Part 1 Customer + Part 2 Technical)
-│   └── SUBMISSION_CHECKLIST.md      # Final submission and incognito verification checklist
+│   ├── ARCHITECTURE.md
+│   ├── DATA_DICTIONARY.md
+│   ├── DATA_ASSUMPTIONS.md
+│   ├── TESTING.md
+│   ├── DEPLOYMENT.md
+│   ├── VIDEO_SCRIPT.md
+│   └── SUBMISSION_CHECKLIST.md
 ├── backend/
-│   ├── Dockerfile                   # Python 3.11 container definition
-│   ├── Procfile                     # Heroku process startup file
-│   ├── requirements.txt             # Python dependencies (FastAPI, Pandas, HTTPX, Pytest)
+│   ├── Dockerfile
+│   ├── Procfile
+│   ├── requirements.txt
+│   ├── reproduce_analysis.py
 │   ├── app/
-│   │   ├── main.py                  # FastAPI application entrypoint and healthcheck
+│   │   ├── main.py
 │   │   ├── core/
-│   │   │   └── config.py            # Pydantic BaseSettings environment configuration
 │   │   ├── schemas/
-│   │   │   ├── observation.py       # Pydantic schemas for observations
-│   │   │   ├── metrics.py           # Pydantic schemas for accuracy metrics
-│   │   │   └── data_quality.py      # Pydantic schemas for data quality summaries
 │   │   ├── services/
-│   │   │   ├── elexon_client.py     # Elexon API client with bounded chunking & retries
-│   │   │   ├── data_cleaner.py      # Fuel filtering, timestamp parsing, deduplication
-│   │   │   ├── forecast_selector.py # Day-Ahead decision cutoff logic
-│   │   │   ├── matcher.py           # Delivery startTime matching & error calculations
-│   │   │   └── pipeline.py          # Central pipeline orchestration & in-memory caching
 │   │   ├── analytics/
-│   │   │   └── metrics.py           # Pure mathematical functions (MAE, RMSE, Bias, distributions)
 │   │   └── api/
-│   │       └── endpoints.py         # REST routes (/overview, /forecasts, /accuracy, /observations)
 │   └── tests/
-│       ├── test_metrics.py          # Unit tests with hand-calculated examples
-│       ├── test_data_cleaner.py     # Cleaning, fuel filtering, and deduplication tests
-│       ├── test_forecast_selector.py# Decision cutoff enforcement & eligibility tests
-│       ├── test_matcher.py          # Forecast-actual matching tests
-│       └── test_api.py              # Integration tests for FastAPI endpoints
-└── frontend/
-    ├── Dockerfile                   # Multi-stage build with Nginx Alpine
-    ├── nginx.conf                   # Nginx reverse proxy & SPA fallback configuration
-    ├── package.json                 # Node dependencies (React 18, Vite, Recharts, Vitest)
-    ├── tsconfig.json                # TypeScript compiler configuration
-    ├── vite.config.ts               # Vite configuration with Vitest setup
-    ├── vercel.json                  # Vercel client-side routing rewrites
-    ├── public/
-    │   └── favicon.svg              # Wind energy favicon
-    └── src/
-        ├── index.css                # Modern dark glassmorphic design system
-        ├── main.tsx                 # React DOM mount point
-        ├── App.tsx                  # Root navigation and view coordinator
-        ├── types/
-        │   └── index.ts             # TypeScript interfaces for API models
-        ├── services/
-        │   └── api.ts               # Type-safe centralized REST client
-        ├── components/
-        │   ├── Header.tsx           # Navigation header, tabs, and cutoff selector
-        │   └── MetricCard.tsx       # Reusable KPI card with status variants
-        ├── pages/
-        │   ├── OverviewPage.tsx     # Page A: Executive overview & time-series
-        │   ├── ForecastComparisonPage.tsx # Page B: Comparison & Vintage Inspector
-        │   ├── AccuracyPage.tsx     # Page C: Statistical accuracy & distributions
-        │   └── DataExplorerPage.tsx # Page D: Paginated table & CSV export
-        └── tests/
-            ├── setup.ts             # Testing Library JSDOM setup
-            ├── MetricCard.test.tsx  # MetricCard component tests
-            ├── Header.test.tsx      # Header & navigation tests
-            └── OverviewPage.test.tsx# Overview page rendering & KPI tests
+├── frontend/
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   ├── vercel.json
+│   ├── public/
+│   └── src/
+│       ├── main.tsx
+│       ├── App.tsx
+│       ├── types/
+│       ├── services/
+│       ├── components/
+│       ├── pages/
+│       └── tests/
+└── artifacts/
+    └── january_2026/
 ```
 
----
+## 11. Prerequisites
 
-## 10. Prerequisites
+Install the following tools:
 
-- **Python**: Version 3.11 or higher
-- **Node.js**: Version 18.0 or higher (v20+ recommended)
-- **Git**: For version control
-- **Docker & Docker Compose**: Optional for containerized local execution
+- Python 3.11 or later.
+- Node.js 18 or later; Node.js 20+ is recommended.
+- npm.
+- Git.
+- Docker Desktop and Docker Compose, if using the containerized setup.
 
----
+Check your versions:
 
-## 11. Local Setup Instructions
+```bash
+python --version
+node --version
+npm --version
+git --version
+docker --version
+docker compose version
+```
 
-### Step 1: Clone Repository
+Docker is optional when running the frontend and backend directly.
+
+## 12. Local Development Setup
+
+### Step 1: Obtain the project
+
+After the repository has been published, clone it using its actual URL:
+
 ```bash
 git clone <repository-url>
 cd windforecast-analytics
 ```
 
-### Step 2: Configure Environment Variables
-Copy `.env.example` to `.env`:
+If you already have the local project, open its directory instead of cloning it again.
+
+### Step 2: Configure environment variables
+
+Copy the example environment file:
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Linux/macOS:
+
 ```bash
 cp .env.example .env
 ```
 
----
+Populate required settings according to `.env.example` and the deployment documentation. Never commit real credentials or secrets.
 
-## 12. Backend Startup Instructions
+### Step 3: Start the backend
+
+From the project root:
+
+```bash
+python -m venv .venv
+```
+
+Activate the environment in PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```bash
+python -m pip install -r backend/requirements.txt
+```
+
+Start the API:
 
 ```bash
 cd backend
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-The backend will start at:
-- **API Base**: `http://localhost:8000`
-- **Health Check**: `http://localhost:8000/health`
-- **Interactive Swagger Docs**: `http://localhost:8000/docs`
 
----
+Backend endpoints:
 
-## 13. Frontend Startup Instructions
+- API base: http://localhost:8000
+- Health check: http://localhost:8000/health
+- Swagger UI: http://localhost:8000/docs
+
+These URLs are local development addresses, not public deployment URLs.
+
+### Step 4: Start the frontend
+
+Open another terminal and navigate to the frontend:
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-The frontend will start at `http://localhost:3000` (or `http://localhost:5173`).
 
----
+Open the local URL printed by Vite. The configured port may be `3000`, `5173`, or another port if the requested port is unavailable.
 
-## 14. Docker Containerization Instructions
+If the application requires a backend URL environment variable, configure it according to the frontend configuration and deployment documentation.
 
-Ensure Docker Desktop daemon is running, then run:
+## 13. Docker Setup
+
+Ensure Docker Desktop is running.
+
+From the project root:
+
 ```bash
+docker compose config
 docker compose up --build
 ```
-- **Frontend**: `http://localhost:3000`
-- **Backend API**: `http://localhost:8000`
-- **Stop Containers**: `docker compose down`
 
----
+Open the frontend and backend URLs configured in `docker-compose.yml`.
 
-## 15. Automated Test Commands
+The documented default ports are:
 
-### Run Backend Tests (Pytest)
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+
+Check container status:
+
+```bash
+docker compose ps
+```
+
+Stop the containers:
+
+```bash
+docker compose down
+```
+
+Review `docker-compose.yml` before startup to confirm ports, environment variables, cache volumes, and health checks.
+
+## 14. Testing and Reproducibility
+
+### Backend tests
+
+From the project root:
+
 ```bash
 python -m pytest backend/tests -v
 ```
-*Expected: 54 passed, 1 skipped (100% of deterministic suite). Live API integration test can be run with `$env:RUN_LIVE_TESTS="1"`.*
 
-### Run Reproducible Analysis & Audit Verification Pipeline
-```bash
-python backend/reproduce_analysis.py --cutoff-hour 11 --cutoff-minute 0 --window decision --resolution hourly
-```
-*Generates and validates all 5 audit artifacts into `artifacts/january_2026/`:*
-1. `analysis_summary.json` (Configuration, effective cutoff metadata, final metrics, independent validation status)
-2. `observations_analysis.csv` (744 rows of evaluated hourly observations with decision cutoff and selected publish timestamps)
-3. `data_quality_report.json` (Record counts, duplicates resolved, missing actuals, 100% data coverage)
-4. `run_manifest.json` (SHA-256 hashes of input caches and output artifacts, git commit, python version)
-5. `validation_log.md` (Table comparing primary pipeline against independent recomputations with diff <= 0.0050 MW / 0.0050% within 2-decimal rounding tolerance)
+The current expected result must be taken from the latest actual test execution. Do not rely on a hard-coded count if the test suite has changed.
 
-### Run Frontend Tests (Vitest)
+### Frontend tests
+
 ```bash
 cd frontend
 npm run test
 ```
-*Expected: 5 passed (100%).*
 
-### Run Frontend Production Typecheck & Build
+The previously documented frontend result is five passing tests. Re-run the command to verify the current state.
+
+### Frontend production build and type checking
+
 ```bash
 cd frontend
 npm run build
 ```
-*Expected: Built in ~6s with zero TypeScript errors.*
+
+Confirm that the command completes successfully without TypeScript errors or build failures.
+
+### Reproduce the primary analysis
+
+From the project root:
+
+```bash
+python backend/reproduce_analysis.py \
+  --cutoff-hour 11 \
+  --cutoff-minute 0 \
+  --window decision \
+  --resolution hourly
+```
+
+On Windows PowerShell, the same command can be written on one line:
+
+```powershell
+python backend/reproduce_analysis.py --cutoff-hour 11 --cutoff-minute 0 --window decision --resolution hourly
+```
+
+Check the script's `--help` output if the available options differ.
+
+The intended audit outputs include:
+
+| Artifact | Purpose |
+|---|---|
+| `analysis_summary.json` | Analysis configuration and reported metrics |
+| `observations_analysis.csv` | Matched delivery-period observations |
+| `data_quality_report.json` | Coverage and data quality summary |
+| `run_manifest.json` | Run metadata and available integrity hashes |
+| `validation_log.md` | Comparison with independent metric calculations |
+
+The expected location in the documented workflow is `artifacts/january_2026/`. Confirm the actual output directory and artifact names after execution.
+
+### Live integration tests
+
+Any opt-in live integration test should be distinguished from deterministic unit tests. Live tests can depend on API availability, network access, and the state of external data sources.
+
+### Reproducibility requirements
+
+For an auditable result, preserve:
+
+- The cutoff configuration.
+- The decision or delivery window.
+- The resolution mode.
+- Input data provenance.
+- Data-cleaning rules.
+- Matched observations.
+- The metric implementation.
+- Validation results and run metadata.
+
+A successful test suite does not, by itself, prove that every historical result has been independently reproduced.
+
+## 15. API Documentation
+
+When the backend is running locally, use:
+
+- Swagger UI: http://localhost:8000/docs
+- Health endpoint: http://localhost:8000/health
+
+The documented API capabilities include overview data, forecast comparisons, accuracy metrics, and observation exploration.
+
+The exact routes and query parameters should be confirmed against the current FastAPI application before external consumers rely on them.
+
+## 16. Configuration
+
+The project supports configurable analysis settings, including:
+
+| Setting | Purpose |
+|---|---|
+| Decision cutoff hour | Sets the cutoff hour for forecast eligibility |
+| Decision cutoff minute | Sets the cutoff minute |
+| Evaluation window | Selects decision-date or delivery-date evaluation |
+| Resolution mode | Selects hourly aggregation or half-hourly transparency mode |
+| API base URL | Configures frontend access to the backend |
+| CORS origins | Restricts allowed frontend origins in deployment |
+| Environment mode | Controls environment-specific backend configuration |
+
+Use the actual environment-variable names and command-line arguments defined by the implementation. Do not invent configuration names that are absent from the code.
+
+## 17. Deployment
+
+The intended deployment architecture separates the React frontend from the FastAPI backend.
+
+### Frontend
+
+Vercel is a proposed hosting option. The repository includes a Vercel configuration file, which should be checked for correct build commands and SPA routing behavior.
+
+### Backend
+
+Heroku, Render, or another compatible container host is a proposed option. Verify the process command, health endpoint, runtime settings, and CORS configuration for the selected provider.
+
+### Deployment checklist
+
+Before making the application public:
+
+- Configure the deployed frontend's backend API URL.
+- Configure CORS for the actual frontend origin.
+- Verify the backend health endpoint.
+- Verify the frontend can load real API responses.
+- Check browser console and network errors.
+- Test direct navigation to every frontend route.
+- Confirm no secrets are exposed in frontend bundles.
+- Test the public application in an incognito browser session.
+
+**Deployment status:** A deployment URL must be added only after a real deployment has completed and the URL has been tested.
+
+- Frontend URL: `Pending deployment`
+- Backend URL: `Pending deployment`
+
+## 18. AI Tools Disclosure
+
+Complete this section according to the tools actually used during development.
+
+Previously documented disclosure:
+
+**AI tools:** Google Gemini and Antigravity Agentic Coding Assistant.
+
+**Reported scope of assistance:** Project planning, documentation structure, data dictionary preparation, initial code scaffolding, mathematical test fixtures, TypeScript interfaces, and presentation scripting.
+
+Update this disclosure if other AI tools materially contributed to the work. Ensure that the description accurately reflects the actual assistance received and the extent of human review and testing.
+
+## 19. Limitations and Future Improvements
+
+### Forecast resolution
+
+The documented workflow evaluates hourly forecasts against hourly-aggregated actual power. Half-hourly transparency mode reports periods without matching forecasts rather than interpolating unsupported values.
+
+### Decision cutoff assumptions
+
+The default 11:00 UTC cutoff is configurable and should not be treated as a universal official exchange deadline. Exchange-specific configurations require appropriate source verification.
+
+### National-level scope
+
+The current analytical focus is national wind generation. Regional forecasts, embedded generation, and local congestion are outside the documented core evaluation.
+
+### Financial interpretation
+
+Forecast error metrics alone do not calculate financial exposure. A future financial analysis would require validated market prices, settlement data, applicable imbalance rules, and an explicit methodology.
+
+### Potential improvements
+
+- Additional independently validated forecast vintages.
+- Expanded data-quality and schema-change monitoring.
+- More configurable forecast horizons.
+- Regional analysis where authoritative data supports it.
+- Financial impact analysis with documented assumptions.
+- Continuous integration and scheduled regression tests.
+- Monitoring of API availability and data freshness.
+
+## 20. Security and Data Integrity
+
+Before publication:
+
+- Confirm `.env` and other credential files are excluded by `.gitignore`.
+- Review tracked files for credentials and private information.
+- Review Git history for previously committed secrets.
+- Inspect cached datasets and generated reports for sensitive information.
+- Avoid including private account details in public documentation.
+- Keep API keys and deployment credentials out of source code.
+- Rotate credentials if exposure is confirmed.
+- Review repository ownership and commit metadata if anonymity is required.
+- Do not claim anonymity merely because the repository name does not contain a personal name.
+
+A `.gitignore` rule does not remove a secret that is already tracked or present in Git history. Any history cleanup should be planned carefully and performed only with explicit authorization.
+
+## 21. Submission Status
+
+The project must not be considered submission-ready solely because local tests pass.
+
+| Deliverable | Status |
+|---|---|
+| Core application | Requires confirmation from the current implementation and tests |
+| Backend tests | Verify against the latest actual test output |
+| Frontend tests | Verify against the latest actual test output |
+| Analysis reproducibility | Verify against the generated audit artifacts |
+| Docker configuration | Verify with `docker compose config` |
+| Public repository | Pending authorized publication |
+| Public deployment | Pending deployment and external verification |
+| Demo video | Pending recording and link verification |
+| Final submission form | Pending completion and confirmation |
+
+### Final acceptance criteria
+
+The project is ready for submission preparation when:
+
+- [ ] The README matches the actual implementation.
+- [ ] Mermaid architecture rendering is valid.
+- [ ] Test counts match recorded test execution.
+- [ ] The analysis can be reproduced using documented settings.
+- [ ] Metric results match the generated audit artifacts.
+- [ ] Repository security checks have been completed.
+- [ ] The anonymity requirement has been clarified.
+- [ ] Deployment instructions match the chosen hosting provider.
+- [ ] Required external deliverables have been completed and verified.
+
+**Current release status:** Do not mark the project as fully submitted until the repository, deployment, demonstration video, and any required submission form have been completed and verified.
 
 ---
 
-## 16. Production Deployment Instructions
-
-See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full instructions:
-- **Frontend (Vercel)**: Connect repository or run `cd frontend && vercel --prod`. Set `VITE_API_BASE_URL` to the deployed backend URL.
-- **Backend (Heroku / Render / Container Host)**: Uses `backend/Procfile` or `backend/Dockerfile`. Set `ENVIRONMENT=production`, `CORS_ORIGINS`, and verify `GET /health`.
-
----
-
-## 17. Disclosure of AI Tools Used
-
-In accordance with assignment requirements:
-- **AI Tools Used**: Google Gemini / Antigravity Agentic Coding Assistant.
-- **Scope of Assistance**: Assisted with project planning documentation, initial boilerplate code structure, data dictionary compilation, mathematical metric unit test fixtures, TypeScript interfaces, and video presentation scripting.
-- **Verification**: All mathematical logic, Elexon API requests, timestamp conversions, cutoff comparisons, and test suites were independently implemented, executed, and verified against real Elexon BMRS January 2026 data.
-
----
-
-## 18. Known Limitations & Future Improvements
-
-1. **Forecast Horizon Resolution**: Elexon `WINDFOR` national forecasts for January 2026 are published at hourly resolution, while `FUELHH` actuals are recorded at 30-minute settlement period frequency. The platform matches all 744 hourly periods strictly without fabricating unobserved half-hours. Future enhancements could implement configurable half-hour spline interpolation if requested by commercial desks.
-2. **Additional Market Cutoffs**: The default cutoff is 11:00 UTC on Day D-1 (configured as an operational utility procurement assumption, with full minute-level support for official exchange deadlines like 09:20 UTC for EPEX SPOT GB or 09:50 UTC for Nord Pool GB). Users can toggle alternative cutoffs via `--cutoff-hour` and `--cutoff-minute`.
-3. **Regional Disaggregation**: Current analysis evaluates national transmission-level wind generation. Integration of embedded wind generation (PV & distributed wind) would provide further insights into localized grid congestion.
-
----
-
-## 19. Submission Readiness Status Summary
-
-> **Overall Submission Readiness Status**: **BLOCKED**  
-> Technical verification, test suites, and analysis reproducibility are 100% verified (`PASS`). Overall submission readiness remains strictly **BLOCKED** until external user deliverables (public repository, deployed application, demo video, and Microsoft Form submission) are completed.
-
-| Area / Deliverable | Status | Verification Status & Operational Notes |
-|---|---|---|
-| **Core application** | `PASS` | All functional, data-cleaning, cutoff, and metric requirements verified on real Elexon January 2026 data. |
-| **Automated tests** | `PASS` | Pytest: 54 passed, 1 skipped, 0 failed. Vitest: 5 passed, 0 failed. TypeScript typecheck and Vite build clean. |
-| **Analysis reproducibility** | `PASS` | Deterministic pipeline (`reproduce_analysis.py`) generates 5 audited artifacts in `artifacts/january_2026/` with 0 lookahead bias. |
-| **Docker configuration** | `PASS` | `docker compose config` validates with exit code 0 and zero warnings. |
-| **Docker image build** | `PASS` | Multi-stage Dockerfiles built successfully (`backend` and `frontend`). |
-| **Docker runtime & health** | `PASS` | Docker Compose running; `windforecast-backend` healthy on port 8000, `windforecast-frontend` on port 3000. |
-| **Public Git repository** | `BLOCKED` | Clean Git commit on `master` branch (`b85f47d`), awaiting user's remote repository configuration. |
-| **Public deployment** | `BLOCKED` | Vercel and Heroku/Render configurations prepared; awaiting user deployment credentials. |
-| **Demo video** | `BLOCKED` | Timed script complete in `docs/VIDEO_SCRIPT.md`; awaiting user screen/voice recording. |
-| **Final external submission** | `BLOCKED` | Microsoft Form at `https://forms.cloud.microsoft/r/FTX6K2bbnU` requires public repo URL and demo video link. |
-
+*This README documents the intended project design and previously reported results. All test counts, analysis metrics, API behavior, and deployment claims should be checked against the current source code and execution artifacts before final publication.*
